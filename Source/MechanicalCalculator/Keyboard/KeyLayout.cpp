@@ -230,6 +230,30 @@ const KeyDef* Layout::FindByEngineKey(const std::string& EngineKey) const
 	return nullptr;
 }
 
+const KeyDef* Layout::KeyForChar(char Ch, bool* NeedsShift) const
+{
+	const std::string S(1, Ch);
+	const KeyDef* Shifted = nullptr;
+	for (const KeyDef& K : Keys)
+	{
+		if (K.Role == KeyRole::Numpad || K.Action != KeyAction::Insert)
+		{
+			continue;
+		}
+		if (K.Insert == S)
+		{
+			*NeedsShift = false;
+			return &K;
+		}
+		if (!Shifted && K.ShiftInsert == S)
+		{
+			Shifted = &K;
+		}
+	}
+	*NeedsShift = Shifted != nullptr;
+	return Shifted;
+}
+
 const Layout& FullSizeAnsi()
 {
 	static const Layout Board = layout_detail::Build();

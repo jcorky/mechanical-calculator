@@ -89,6 +89,8 @@ struct Layout
 
 	const KeyDef* Find(const std::string& Id) const;
 	const KeyDef* FindByEngineKey(const std::string& EngineKey) const;
+	// The main-block key that types Ch, and whether shift must be held (nullptr if none does).
+	const KeyDef* KeyForChar(char Ch, bool* NeedsShift) const;
 };
 
 // The board this project builds.
