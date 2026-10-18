@@ -403,8 +403,15 @@ TEST(geometry_board_parts_closed)
 	const int Parts = Components(B.PcbParts);
 	CheckSolid("pcb parts", B.PcbParts, Parts, 0);
 	CHECK(Parts >= 3 * static_cast<int>(L.Keys.size()) + 2);
-	CheckSolid("display bezel", B.DisplayBezel, 1, 0);
-	CheckSolid("display glass", B.DisplayGlass, 1, 0);
+	// Without the OLED module (the default) a name plate with two screws fills its window.
+	CheckSolid("name plate", B.NamePlate, 3, 0);
+	CHECK(B.DisplayBezel.Triangles.empty() && B.DisplayGlass.Triangles.empty() && B.DisplayWidthMm == 0.0);
+	mgeo::CaseParams WithOled;
+	WithOled.OledModule = true;
+	const mgeo::BoardParts O = mgeo::BuildBoard(L, WithOled);
+	CheckSolid("display bezel", O.DisplayBezel, 1, 0);
+	CheckSolid("display glass", O.DisplayGlass, 1, 0);
+	CHECK(O.NamePlate.Triangles.empty());
 	CHECK(B.CaseShell.TriangleCount() < 50000);
 	CHECK(B.Plate.TriangleCount() < 30000);
 	std::printf("    triangles: case %d badge %d feet %d plate %d pcb %d parts %d bezel %d glass %d\n", B.CaseShell.TriangleCount(), B.CaseBadge.TriangleCount(), B.Feet.TriangleCount(),
@@ -535,10 +542,24 @@ TEST(geometry_keycap_clears_switch)
 	}
 }
 
-TEST(geometry_display_clear_of_keys)
+TEST(geometry_name_plate_in_display_window)
 {
 	const mkb::Layout& L = mkb::FullSizeAnsi();
 	const mgeo::BoardParts B = mgeo::BuildBoard(L, mgeo::CaseParams());
+	const Bounds N = BoundsOf(B.NamePlate);
+	const double U = mkb::kUnitMm;
+	const mkb::Rect& W = L.Display;
+	CHECK(N.Lo.X >= (W.X - 0.5 * L.Width) * U && N.Hi.X <= (W.X + W.W - 0.5 * L.Width) * U);
+	CHECK(N.Hi.Y <= (0.5 * L.Height - W.Y) * U && N.Lo.Y >= (0.5 * L.Height - W.Y - W.H) * U);
+	CHECK(N.Lo.Z > -0.1 && N.Hi.Z < 3.0);
+}
+
+TEST(geometry_display_clear_of_keys)
+{
+	const mkb::Layout& L = mkb::FullSizeAnsi();
+	mgeo::CaseParams WithOled;
+	WithOled.OledModule = true;
+	const mgeo::BoardParts B = mgeo::BuildBoard(L, WithOled);
 	const Bounds D = BoundsOf(B.DisplayBezel);
 	const double U = mkb::kUnitMm;
 	for (const mkb::KeyDef& K : L.Keys)
@@ -622,4 +643,46 @@ TEST(geometry_board_rests_on_feet)
 	const mgeo::SwitchParts Sw = mgeo::BuildSwitch(mgeo::SwitchParams());
 	CHECK(BoundsOf(Sw.Pins).Lo.Z > -CP.DepthBelowPlate + CP.WallMm);
 	CHECK(BoundsOf(B.PcbParts).Lo.Z > -CP.DepthBelowPlate + CP.WallMm);
+}
+
+// Vintage caps: closed (the disc and its stem posts), the legend frame on the dished face, the
+// chrome rim round the disc, and clear of the switch at full travel.
+TEST(geometry_vintage_keycaps)
+{
+	const double Sizes[][2] = {{1, 1}, {1.5, 1}, {2.25, 1}, {6.25, 1}, {1, 2}};
+	const mgeo::SwitchParams SP;
+	const mgeo::SwitchParts Sw = mgeo::BuildSwitch(SP);
+	for (const auto& Sz : Sizes)
+	{
+		mgeo::KeycapParams P = Cap(Sz[0], Sz[1], 3);
+		P.Style = mgeo::KeycapStyle::Vintage;
+		const Mesh M = mgeo::BuildKeycap(P);
+		const Mesh Rim = mgeo::BuildKeycapRim(P);
+		const int Stems = mgeo::StabilizerSpacingMm(std::max(Sz[0], Sz[1])) > 0.0 ? 3 : 1;
+		CheckSolid("vintage cap", M, 1 + Stems, 0);
+		CheckSolid("vintage rim", Rim, 1, 1);
+		CHECK(M.TriangleCount() < 4000);
+		const mgeo::KeycapTop T = mgeo::KeycapTopFor(P);
+		const Hit H = FirstHit(M, Vec3(1e-4, T.CenterY + 1e-4, 50.0), Vec3(0, 0, -1));
+		CHECK_NEAR(50.0 - H.T, T.CenterZ, 0.02);
+		CHECK(H.Normal.Z > 0.9999 && T.TiltRad == 0.0);
+		const Hit F = FirstHit(Rim, Vec3(1e-4, -50.0, T.FrontFaceZ), Vec3(0, 1, 0));
+		CHECK_NEAR(F.T - 50.0, T.FrontFaceY, 0.05);
+		const Bounds Br = BoundsOf(Rim), Bm = BoundsOf(M);
+		CHECK(Br.Hi.Z > Bm.Hi.Z && Br.Hi.X > Bm.Hi.X && Br.Hi.X - Br.Lo.X < Sz[0] * mkb::kUnitMm);
+		int Clash = 0;
+		Mesh Pressed = M;
+		Pressed.Translate(Vec3(0, 0, SP.StemTopZ - SP.TravelMm));
+		for (const Vec3& Q : Sw.HousingTop.Positions)
+		{
+			Clash += Inside(Pressed, Q) ? 1 : 0;
+		}
+		for (const Vec3& Q : Sw.Stem.Positions)
+		{
+			Clash += Inside(M, Q) ? 1 : 0;
+		}
+		CHECK(Clash == 0);
+	}
+	// The default style is unchanged.
+	CHECK(mgeo::BuildKeycapRim(Cap(1, 1, 3)).Triangles.empty());
 }

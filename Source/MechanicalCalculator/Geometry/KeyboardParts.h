@@ -22,8 +22,15 @@
 
 namespace mgeo
 {
+enum class KeycapStyle
+{
+	Sculpted,   // Cherry-profile sculpted caps
+	Vintage,    // round, flat-topped typewriter keys with a chrome rim ring, on a stem
+};
+
 struct KeycapParams
 {
+	KeycapStyle Style = KeycapStyle::Sculpted;
 	double WidthU = 1.0;        // key units
 	double DepthU = 1.0;
 	int ProfileRow = 3;         // Cherry-style sculpt, 1 (number row, tallest) .. 4 (bottom rows)
@@ -59,7 +66,10 @@ struct KeycapTop
 // UVs: the top surface maps the dish to 0..1 (U along x, V from front to back); every other vertex
 // has U in [-2, -1.5], so a legend material can mask on U >= 0.
 // KeycapTopFor returns values in this same cap-local frame.
+// Vintage caps: a round top (a stadium for wider keys) on a stem column, with a slightly dished
+// legend face that carries the same 0..1 UVs; their chrome rim ring is a separate mesh.
 Mesh BuildKeycap(const KeycapParams& P);
+Mesh BuildKeycapRim(const KeycapParams& P);   // the vintage cap's chrome ring (empty for sculpted caps)
 KeycapTop KeycapTopFor(const KeycapParams& P);
 // Sculpted row height: the top's plane at its back edge, above the bottom of the skirt.
 double KeycapHeightMm(int ProfileRow);
@@ -125,6 +135,7 @@ struct CaseParams
 	double PlateThickness = 1.5;
 	double PcbThickness = 1.6;
 	double PcbGapBelowPlate = 3.5;
+	bool OledModule = false;         // the OLED above the numpad; without it a brass name plate sits there
 };
 
 struct BoardParts
@@ -149,6 +160,7 @@ struct BoardParts
 	// raise by RestLiftMm so the lowest point of the feet touches z = 0.
 	double RestTiltRad = 0.0;
 	double RestLiftMm = 0.0;
+	Mesh NamePlate;             // brass plate in the display window when there is no OLED module
 };
 
 BoardParts BuildBoard(const mkb::Layout& Layout, const CaseParams& P);
