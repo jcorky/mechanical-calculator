@@ -40,5 +40,9 @@ add_library(mcalc_unity OBJECT ${UNITY_FILE})
 target_include_directories(mcalc_unity PRIVATE ${MODULE_DIR}/Calc ${MODULE_DIR}/Geometry ${MODULE_DIR}/Keyboard)
 target_compile_options(mcalc_unity PRIVATE ${STRICT_FLAGS})
 
+# The calculator on the command line.
+add_executable(mcalc_cli ${CMAKE_CURRENT_SOURCE_DIR}/tools/mcalc_cli.cpp)
+target_link_libraries(mcalc_cli PRIVATE mcalc_core)
+
 enable_testing()
 add_test(NAME mcalc_tests COMMAND mcalc_tests)

@@ -94,12 +94,15 @@ AMechanicalKeyboard::AMechanicalKeyboard()
 	BoardRoot = CreateDefaultSubobject<USceneComponent>(TEXT("BoardRoot"));
 	BoardRoot->SetupAttachment(Root);
 
+	// One line from each corner of Where It Isn't, typed on the keys until the first real keystroke.
 	DemoLines = {
+		TEXT("hohmann(6678e3, 42164e3)"),
+		TEXT("db(snr_track(1.4e6, 2000, 0.1, 1, 111e3, 950, 1.67e6, 6.3))"),
+		TEXT("erlangc(3, 2.4)"),
+		TEXT("quat_rot(quat([0, 0, 1], pi/2), [1, 0, 0])"),
+		TEXT("planform().S"),
+		TEXT("A = [1, 0.1; 0, 1]; B = [0.005; 0.1]; dare(A, B, eye(2), 0.5)"),
 		TEXT("help"),
-		TEXT("2^10 + sqrt(2)"),
-		TEXT("A = [4, 1; 2, 3]; eig(A)"),
-		TEXT("dare([1, 0.1; 0, 1], [0.005; 0.1], eye(2), 0.5)"),
-		TEXT("list"),
 	};
 }
 

@@ -985,12 +985,14 @@ std::vector<std::string> Session::Format(const Value& V, int Width) const
 	}
 	std::vector<size_t> ColW(static_cast<size_t>(M.Cols), 0);
 	std::vector<std::string> Cells(M.V.size());
+	// Round-off next to the matrix's largest entry prints as 0 (display only; the value keeps it).
+	const double Chop = 1e-13 * la::MaxAbs(M);
 	for (int i = 0; i < M.Rows; ++i)
 	{
 		for (int j = 0; j < M.Cols; ++j)
 		{
 			const size_t Idx = static_cast<size_t>(i * M.Cols + j);
-			Cells[Idx] = FormatNumber(M(i, j));
+			Cells[Idx] = FormatNumber(std::fabs(M(i, j)) < Chop ? 0.0 : M(i, j));
 			ColW[static_cast<size_t>(j)] = std::max(ColW[static_cast<size_t>(j)], Cells[Idx].size());
 		}
 	}
