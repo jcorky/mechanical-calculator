@@ -55,6 +55,7 @@ void TypeKeys(mkb::CalculatorDevice& Dev, const std::string& Text)
 TEST(device_types_and_evaluates_through_keys)
 {
 	mkb::CalculatorDevice Dev;
+	Dev.SetShowWork(false);
 	TypeKeys(Dev, "2*(3+4)^2");
 	CHECK(Dev.Input() == "2*(3+4)^2");
 	const mkb::DeviceEvents Ev = Dev.Press(K("Enter"));
@@ -134,6 +135,7 @@ TEST(device_editing_keys)
 TEST(device_completion_help_and_function_keys)
 {
 	mkb::CalculatorDevice Dev;
+	Dev.SetShowWork(false);
 	TypeKeys(Dev, "sqr");
 	Tap(Dev, "Tab");
 	CHECK(Dev.Input() == "sqrt(");
@@ -169,6 +171,7 @@ TEST(device_completion_help_and_function_keys)
 TEST(device_screen_layout)
 {
 	mkb::CalculatorDevice Dev;
+	Dev.SetShowWork(false);
 	TypeKeys(Dev, "x = 7");
 	Dev.Enter();
 	TypeKeys(Dev, "x*6");
@@ -274,4 +277,24 @@ TEST(backlight_modes)
 	B.SetMode(2);
 	const mkb::Rgb W = B.ColorFor(F, 0.3);
 	CHECK(W.R >= 0 && W.R <= 1 && W.G >= 0 && W.G <= 1 && W.B >= 0 && W.B <= 1);
+}
+
+TEST(device_async_locks_the_keys_and_prints_the_work)
+{
+	mkb::CalculatorDevice Dev;
+	Dev.SetAsync(true);
+	TypeKeys(Dev, "7*6");
+	const mkb::DeviceEvents Ev = Dev.Press(K("Enter"));
+	CHECK(Ev.EvaluationStarted && Dev.Busy() && Dev.PendingExpression() == "7*6");
+	Tap(Dev, "D1");                       // locked: ignored
+	CHECK(Dev.Input().empty());
+	mcalc::GearContext::ResetStats();
+	const mcalc::Outcome O = Dev.GetSession().Execute(Dev.PendingExpression());
+	Dev.CompleteEvaluation(O, mcalc::GearContext::Stats());
+	CHECK(!Dev.Busy());
+	const std::vector<std::string>& T = Dev.Tape();
+	CHECK(T.size() >= 2 && T[T.size() - 2] == "= 42");
+	CHECK(T.back() == "  ~ 6 turns, 34 shifts");   // 7 set, six turns of the crank
+	TypeKeys(Dev, "1");
+	CHECK(Dev.Input() == "1");
 }

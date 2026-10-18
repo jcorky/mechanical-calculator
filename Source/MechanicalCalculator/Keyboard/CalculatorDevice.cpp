@@ -211,9 +211,27 @@ void CalculatorDevice::Evaluate(DeviceEvents& Ev)
 	History.push_back(Line);
 	HistoryIndex = -1;
 	AddTape(Line, "> ");
-	const mcalc::Outcome O = Calc.Execute(Line);
+	Pending = Line;
+	Line.clear();
+	CursorPos = 0;
+	if (bAsync)
+	{
+		bBusy = true;
+		Ev.EvaluationStarted = true;
+		return;
+	}
+	mcalc::GearContext::ResetStats();
+	const mcalc::Outcome O = Calc.Execute(Pending);
+	CompleteEvaluation(O, mcalc::GearContext::Stats());
 	Ev.Evaluated = true;
 	Ev.EvaluationFailed = !O.Ok;
+}
+
+void CalculatorDevice::CompleteEvaluation(const mcalc::Outcome& O, const mcalc::GearStats& InWork)
+{
+	bBusy = false;
+	Pending.clear();
+	Work = InWork;
 	if (!O.Ok)
 	{
 		AddTape(O.Text, "! ");
@@ -235,8 +253,10 @@ void CalculatorDevice::Evaluate(DeviceEvents& Ev)
 			}
 		}
 	}
-	Line.clear();
-	CursorPos = 0;
+	if (bShowWork && Work.Turns > 0)
+	{
+		AddTape(std::to_string(Work.Turns) + (Work.Turns == 1 ? " turn" : " turns") + ", " + std::to_string(Work.Shifts) + " shifts", "  ~ ");
+	}
 }
 
 KeyAction CalculatorDevice::NumpadNavigation(const KeyDef& Key) const
@@ -256,6 +276,10 @@ KeyAction CalculatorDevice::NumpadNavigation(const KeyDef& Key) const
 
 DeviceEvents CalculatorDevice::Press(const KeyDef& Key)
 {
+	if (bBusy)
+	{
+		return DeviceEvents();   // the keyboard is locked while the machine runs
+	}
 	KeyAction Action = Key.Action;
 	if (Key.Role == KeyRole::Numpad && !Num)
 	{
@@ -282,6 +306,10 @@ DeviceEvents CalculatorDevice::TypeText(const std::string& Text)
 
 DeviceEvents CalculatorDevice::Enter()
 {
+	if (bBusy)
+	{
+		return DeviceEvents();
+	}
 	return Act(KeyAction::Evaluate, nullptr);
 }
 

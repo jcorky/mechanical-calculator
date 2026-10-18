@@ -1091,10 +1091,22 @@ bool Care(const Matrix& A, const Matrix& B, const Matrix& Q, const Matrix& R, Ma
 	{
 		return false;
 	}
-	*P = Symmetrize(Sol);
+	const Matrix Ps = Symmetrize(Sol);
+	// The sign method can return a P for a pair that is not stabilizable (e.g. B = 0): accept it only
+	// if it solves the equation and A - B K is stable.
+	const Matrix Gain = Mul(Mul(Rinv, Transpose(B)), Ps);
+	const Matrix Res = Add(Add(Mul(Transpose(A), Ps), Mul(Ps, A)), Sub(Q, Mul(Mul(Ps, G), Ps)));
+	std::vector<Real> Re, Im;
+	if (MaxAbs(Res) > Real(1e-8) * gm::max(Real(1), MaxAbs(Q) + MaxAbs(Ps)) || !Eigenvalues(Sub(A, Mul(B, Gain)), &Re, &Im, nullptr) ||
+		(!Re.empty() && Re[0] >= Real(0)))
+	{
+		SetError(Error, "care: no stabilizing solution (check stabilizability and detectability)");
+		return false;
+	}
+	*P = Ps;
 	if (K)
 	{
-		*K = Mul(Mul(Rinv, Transpose(B)), *P);
+		*K = Gain;
 	}
 	return true;
 }

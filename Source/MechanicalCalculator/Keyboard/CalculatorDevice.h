@@ -18,6 +18,7 @@ namespace mkb
 {
 struct DeviceEvents
 {
+	bool EvaluationStarted = false;   // async mode: PendingExpression() is ready to run on the machine
 	bool Evaluated = false;
 	bool EvaluationFailed = false;
 	bool ExplodeToggled = false;
@@ -39,6 +40,17 @@ public:
 
 	std::vector<std::string> Screen(int Cols, int Rows, bool CursorOn) const;
 
+	// Asynchronous evaluation, for the Unreal layer: Enter hands the line over (EvaluationStarted)
+	// and the keyboard locks, as a calculating machine's does while its motor runs, until the
+	// result comes back through CompleteEvaluation. Synchronous (the default) runs it at once.
+	void SetAsync(bool bInAsync) { bAsync = bInAsync; }
+	bool Busy() const { return bBusy; }
+	const std::string& PendingExpression() const { return Pending; }
+	void CompleteEvaluation(const mcalc::Outcome& O, const mcalc::GearStats& Work);
+	// Prints the crank-turn count of each evaluation on the tape (on by default).
+	void SetShowWork(bool bShow) { bShowWork = bShow; }
+	const mcalc::GearStats& LastWork() const { return Work; }
+
 	const std::string& Input() const { return Line; }
 	int Cursor() const { return CursorPos; }
 	const std::vector<std::string>& Tape() const { return TapeLines; }
@@ -48,6 +60,7 @@ public:
 	bool FnHeld() const { return FnCount > 0; }
 	bool Exploded() const { return Explode; }
 	int BacklightMode() const { return Backlight; }
+	std::string StatusText() const { return StatusLine(64); }
 	bool LibraryOpen() const { return LibCategory >= 0; }
 	mcalc::Session& GetSession() { return Calc; }
 	const mcalc::Session& GetSession() const { return Calc; }
@@ -56,6 +69,11 @@ public:
 
 private:
 	mcalc::Session Calc;
+	bool bAsync = false;
+	bool bBusy = false;
+	bool bShowWork = true;
+	std::string Pending;
+	mcalc::GearStats Work;
 	std::string Line;
 	int CursorPos = 0;
 	std::vector<std::string> History;

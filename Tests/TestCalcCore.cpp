@@ -274,3 +274,11 @@ TEST(registry_names_are_unique_and_documented)
 	}
 	std::printf("    %zu functions in %zu categories\n", R.All().size(), R.Categories().size());
 }
+
+TEST(care_rejects_an_unstabilizable_pair)
+{
+	Matrix P, K;
+	std::string E;
+	CHECK(!la::Care(Matrix::Identity(2), Matrix::Column({0, 0}), Matrix::Identity(2), Matrix::Scalar(1), &P, &K, &E));
+	CHECK(!E.empty());
+}
