@@ -150,6 +150,7 @@ private:
 		double PressedAt = -1.0;
 		bool bReleasePending = false;
 		bool bLatched = false;
+		bool bSettled = false;            // placed at rest; skipped until it moves again
 		int32 HousingVertexStart = 0;
 		int32 HousingVertexCount = 0;
 	};

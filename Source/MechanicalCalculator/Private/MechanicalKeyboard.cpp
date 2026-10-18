@@ -776,6 +776,7 @@ void AMechanicalKeyboard::RefreshScreen()
 void AMechanicalKeyboard::TickKeys(float DeltaSeconds)
 {
 	const double Lift = Explode * ExplodeHeight;
+	const bool bLayersMoving = ExplodeVelocity != 0.0f || Explode != (bExplodeTarget ? 1.0f : 0.0f);
 	for (int32 i = 0; i < Keys.Num(); ++i)
 	{
 		FKeyRuntime& R = Keys[i];
@@ -802,6 +803,12 @@ void AMechanicalKeyboard::TickKeys(float DeltaSeconds)
 				Audio.Play(this, Where, mkb::KeySoundKind::Click, Def.W, 1.0, SoundVolume);
 			}
 		}
+		// A key at rest stays where it was last placed unless the exploded view is moving.
+		if (R.bSettled && !bLayersMoving && R.Switch.IsAtRest())
+		{
+			continue;
+		}
+		R.bSettled = R.Switch.IsAtRest();
 		const double Travel = R.Switch.PositionMm() * 0.1;
 		if (R.Mover)
 		{
