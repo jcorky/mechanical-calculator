@@ -16,21 +16,21 @@ Matrix Matrix::Identity(int N)
 	return I;
 }
 
-Matrix Matrix::Column(const std::vector<double>& Values)
+Matrix Matrix::Column(const std::vector<Real>& Values)
 {
 	Matrix M(static_cast<int>(Values.size()), 1);
 	M.V = Values;
 	return M;
 }
 
-Matrix Matrix::Row(const std::vector<double>& Values)
+Matrix Matrix::Row(const std::vector<Real>& Values)
 {
 	Matrix M(1, static_cast<int>(Values.size()));
 	M.V = Values;
 	return M;
 }
 
-Matrix Matrix::FromRows(const std::vector<std::vector<double>>& RowValues)
+Matrix Matrix::FromRows(const std::vector<std::vector<Real>>& RowValues)
 {
 	const int R = static_cast<int>(RowValues.size());
 	const int C = R > 0 ? static_cast<int>(RowValues[0].size()) : 0;
@@ -49,7 +49,10 @@ namespace la
 {
 namespace matrix_detail
 {
-constexpr double kEps = std::numeric_limits<double>::epsilon();
+Real Eps()
+{
+	return Real::Epsilon();
+}
 
 void SetError(std::string* Error, const char* Message)
 {
@@ -59,15 +62,15 @@ void SetError(std::string* Error, const char* Message)
 	}
 }
 
-double Norm1(const Matrix& A)
+Real Norm1(const Matrix& A)
 {
-	double Best = 0.0;
+	Real Best = 0.0;
 	for (int j = 0; j < A.Cols; ++j)
 	{
-		double S = 0.0;
+		Real S = 0.0;
 		for (int i = 0; i < A.Rows; ++i)
 		{
-			S += std::fabs(A(i, j));
+			S += gm::fabs(A(i, j));
 		}
 		Best = std::max(Best, S);
 	}
@@ -84,18 +87,18 @@ bool LuFactor(Matrix& A, std::vector<int>& Perm, int& Sign)
 		Perm[static_cast<size_t>(i)] = i;
 	}
 	Sign = 1;
-	const double Scale = std::max(MaxAbs(A), 1e-300);
+	const Real Scale = gm::max(MaxAbs(A), Real(1e-300));
 	for (int c = 0; c < N; ++c)
 	{
 		int P = c;
 		for (int r = c + 1; r < N; ++r)
 		{
-			if (std::fabs(A(r, c)) > std::fabs(A(P, c)))
+			if (gm::fabs(A(r, c)) > gm::fabs(A(P, c)))
 			{
 				P = r;
 			}
 		}
-		if (std::fabs(A(P, c)) <= Scale * 1e-14)
+		if (gm::fabs(A(P, c)) <= Scale * 1e-14)
 		{
 			return false;
 		}
@@ -110,7 +113,7 @@ bool LuFactor(Matrix& A, std::vector<int>& Perm, int& Sign)
 		}
 		for (int r = c + 1; r < N; ++r)
 		{
-			const double F = A(r, c) / A(c, c);
+			const Real F = A(r, c) / A(c, c);
 			A(r, c) = F;
 			if (F != 0.0)
 			{
@@ -160,10 +163,10 @@ Matrix Sub(const Matrix& A, const Matrix& B)
 	return C;
 }
 
-Matrix Scale(const Matrix& A, double S)
+Matrix Scale(const Matrix& A, Real S)
 {
 	Matrix C = A;
-	for (double& X : C.V)
+	for (Real& X : C.V)
 	{
 		X *= S;
 	}
@@ -177,7 +180,7 @@ Matrix Mul(const Matrix& A, const Matrix& B)
 	{
 		for (int k = 0; k < A.Cols; ++k)
 		{
-			const double Aik = A(i, k);
+			const Real Aik = A(i, k);
 			if (Aik == 0.0)
 			{
 				continue;
@@ -191,9 +194,9 @@ Matrix Mul(const Matrix& A, const Matrix& B)
 	return C;
 }
 
-double Trace(const Matrix& A)
+Real Trace(const Matrix& A)
 {
-	double S = 0.0;
+	Real S = 0.0;
 	for (int i = 0; i < std::min(A.Rows, A.Cols); ++i)
 	{
 		S += A(i, i);
@@ -201,22 +204,22 @@ double Trace(const Matrix& A)
 	return S;
 }
 
-double FrobeniusNorm(const Matrix& A)
+Real FrobeniusNorm(const Matrix& A)
 {
-	double S = 0.0;
-	for (double X : A.V)
+	Real S = 0.0;
+	for (Real X : A.V)
 	{
 		S += X * X;
 	}
-	return std::sqrt(S);
+	return gm::sqrt(S);
 }
 
-double MaxAbs(const Matrix& A)
+Real MaxAbs(const Matrix& A)
 {
-	double M = 0.0;
-	for (double X : A.V)
+	Real M = 0.0;
+	for (Real X : A.V)
 	{
-		M = std::max(M, std::fabs(X));
+		M = std::max(M, gm::fabs(X));
 	}
 	return M;
 }
@@ -226,7 +229,7 @@ Matrix Symmetrize(const Matrix& A)
 	return Scale(Add(A, Transpose(A)), 0.5);
 }
 
-bool Determinant(const Matrix& A, double* Out, std::string* Error)
+bool Determinant(const Matrix& A, Real* Out, std::string* Error)
 {
 	if (!A.IsSquare())
 	{
@@ -241,7 +244,7 @@ bool Determinant(const Matrix& A, double* Out, std::string* Error)
 		*Out = 0.0;
 		return true;
 	}
-	double D = static_cast<double>(Sign);
+	Real D = static_cast<Real>(Sign);
 	for (int i = 0; i < LU.Rows; ++i)
 	{
 		D *= LU(i, i);
@@ -269,10 +272,10 @@ bool Solve(const Matrix& A, const Matrix& B, Matrix* X, std::string* Error)
 	Matrix Out(N, B.Cols);
 	for (int c = 0; c < B.Cols; ++c)
 	{
-		std::vector<double> Y(static_cast<size_t>(N));
+		std::vector<Real> Y(static_cast<size_t>(N));
 		for (int i = 0; i < N; ++i)
 		{
-			double S = B(Perm[static_cast<size_t>(i)], c);
+			Real S = B(Perm[static_cast<size_t>(i)], c);
 			for (int j = 0; j < i; ++j)
 			{
 				S -= LU(i, j) * Y[static_cast<size_t>(j)];
@@ -281,7 +284,7 @@ bool Solve(const Matrix& A, const Matrix& B, Matrix* X, std::string* Error)
 		}
 		for (int i = N - 1; i >= 0; --i)
 		{
-			double S = Y[static_cast<size_t>(i)];
+			Real S = Y[static_cast<size_t>(i)];
 			for (int j = i + 1; j < N; ++j)
 			{
 				S -= LU(i, j) * Out(j, c);
@@ -316,7 +319,7 @@ bool Cholesky(const Matrix& A, Matrix* L, std::string* Error)
 	{
 		for (int j = 0; j <= i; ++j)
 		{
-			double S = 0.5 * (A(i, j) + A(j, i));
+			Real S = 0.5 * (A(i, j) + A(j, i));
 			for (int k = 0; k < j; ++k)
 			{
 				S -= Out(i, k) * Out(j, k);
@@ -328,7 +331,7 @@ bool Cholesky(const Matrix& A, Matrix* L, std::string* Error)
 					SetError(Error, "matrix is not positive definite");
 					return false;
 				}
-				Out(i, i) = std::sqrt(S);
+				Out(i, i) = gm::sqrt(S);
 			}
 			else
 			{
@@ -340,7 +343,7 @@ bool Cholesky(const Matrix& A, Matrix* L, std::string* Error)
 	return true;
 }
 
-bool SymmetricEigen(const Matrix& InA, std::vector<double>* W, Matrix* Vecs, std::string* Error)
+bool SymmetricEigen(const Matrix& InA, std::vector<Real>* W, Matrix* Vecs, std::string* Error)
 {
 	if (!InA.IsSquare())
 	{
@@ -350,10 +353,10 @@ bool SymmetricEigen(const Matrix& InA, std::vector<double>* W, Matrix* Vecs, std
 	const int N = InA.Rows;
 	Matrix A = Symmetrize(InA);
 	Matrix Vm = Matrix::Identity(N);
-	const double Scale = std::max(FrobeniusNorm(A), 1e-300);
+	const Real Scale = gm::max(FrobeniusNorm(A), Real(1e-300));
 	for (int Sweep = 0; Sweep < 100; ++Sweep)
 	{
-		double Off = 0.0;
+		Real Off = 0.0;
 		for (int p = 0; p < N; ++p)
 		{
 			for (int q = p + 1; q < N; ++q)
@@ -361,7 +364,7 @@ bool SymmetricEigen(const Matrix& InA, std::vector<double>* W, Matrix* Vecs, std
 				Off += A(p, q) * A(p, q);
 			}
 		}
-		if (std::sqrt(Off) <= Scale * 1e-15)
+		if (gm::sqrt(Off) <= Scale * 1e-15)
 		{
 			break;
 		}
@@ -369,32 +372,32 @@ bool SymmetricEigen(const Matrix& InA, std::vector<double>* W, Matrix* Vecs, std
 		{
 			for (int q = p + 1; q < N; ++q)
 			{
-				if (std::fabs(A(p, q)) <= Scale * 1e-300)
+				if (gm::fabs(A(p, q)) <= Scale * 1e-300)
 				{
 					continue;
 				}
-				const double Theta = (A(q, q) - A(p, p)) / (2.0 * A(p, q));
-				const double T = (Theta >= 0.0 ? 1.0 : -1.0) / (std::fabs(Theta) + std::sqrt(Theta * Theta + 1.0));
-				const double C = 1.0 / std::sqrt(T * T + 1.0);
-				const double S = T * C;
+				const Real Theta = (A(q, q) - A(p, p)) / (2.0 * A(p, q));
+				const Real T = (Theta >= 0.0 ? 1.0 : -1.0) / (gm::fabs(Theta) + gm::sqrt(Theta * Theta + 1.0));
+				const Real C = 1.0 / gm::sqrt(T * T + 1.0);
+				const Real S = T * C;
 				for (int k = 0; k < N; ++k)
 				{
-					const double Akp = A(k, p);
-					const double Akq = A(k, q);
+					const Real Akp = A(k, p);
+					const Real Akq = A(k, q);
 					A(k, p) = C * Akp - S * Akq;
 					A(k, q) = S * Akp + C * Akq;
 				}
 				for (int k = 0; k < N; ++k)
 				{
-					const double Apk = A(p, k);
-					const double Aqk = A(q, k);
+					const Real Apk = A(p, k);
+					const Real Aqk = A(q, k);
 					A(p, k) = C * Apk - S * Aqk;
 					A(q, k) = S * Apk + C * Aqk;
 				}
 				for (int k = 0; k < N; ++k)
 				{
-					const double Vkp = Vm(k, p);
-					const double Vkq = Vm(k, q);
+					const Real Vkp = Vm(k, p);
+					const Real Vkq = Vm(k, q);
 					Vm(k, p) = C * Vkp - S * Vkq;
 					Vm(k, q) = S * Vkp + C * Vkq;
 				}
@@ -425,7 +428,7 @@ bool SymmetricEigen(const Matrix& InA, std::vector<double>* W, Matrix* Vecs, std
 	return true;
 }
 
-bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>* Im, std::string* Error)
+bool Eigenvalues(const Matrix& InA, std::vector<Real>* Re, std::vector<Real>* Im, std::string* Error)
 {
 	if (!InA.IsSquare())
 	{
@@ -434,7 +437,7 @@ bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>
 	}
 	const int n = InA.Rows;
 	// 1-indexed working copy, following the EISPACK/Numerical Recipes elmhes + hqr pair.
-	std::vector<std::vector<double>> a(static_cast<size_t>(n + 1), std::vector<double>(static_cast<size_t>(n + 1), 0.0));
+	std::vector<std::vector<Real>> a(static_cast<size_t>(n + 1), std::vector<Real>(static_cast<size_t>(n + 1), 0.0));
 	for (int i = 1; i <= n; ++i)
 	{
 		for (int j = 1; j <= n; ++j)
@@ -444,11 +447,11 @@ bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>
 	}
 	for (int m = 2; m < n; ++m)
 	{
-		double x = 0.0;
+		Real x = 0.0;
 		int i = m;
 		for (int j = m; j <= n; ++j)
 		{
-			if (std::fabs(a[j][m - 1]) > std::fabs(x))
+			if (gm::fabs(a[j][m - 1]) > gm::fabs(x))
 			{
 				x = a[j][m - 1];
 				i = j;
@@ -469,7 +472,7 @@ bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>
 		{
 			for (i = m + 1; i <= n; ++i)
 			{
-				double y = a[i][m - 1];
+				Real y = a[i][m - 1];
 				if (y != 0.0)
 				{
 					y /= x;
@@ -494,18 +497,18 @@ bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>
 		}
 	}
 
-	std::vector<double> wr(static_cast<size_t>(n + 1), 0.0), wi(static_cast<size_t>(n + 1), 0.0);
-	double anorm = 0.0;
+	std::vector<Real> wr(static_cast<size_t>(n + 1), 0.0), wi(static_cast<size_t>(n + 1), 0.0);
+	Real anorm = 0.0;
 	for (int i = 1; i <= n; ++i)
 	{
 		for (int j = std::max(i - 1, 1); j <= n; ++j)
 		{
-			anorm += std::fabs(a[i][j]);
+			anorm += gm::fabs(a[i][j]);
 		}
 	}
 	int nn = n;
-	double t = 0.0;
-	double p = 0.0, q = 0.0, r = 0.0, s = 0.0, w = 0.0, x = 0.0, y = 0.0, z = 0.0;
+	Real t = 0.0;
+	Real p = 0.0, q = 0.0, r = 0.0, s = 0.0, w = 0.0, x = 0.0, y = 0.0, z = 0.0;
 	while (nn >= 1)
 	{
 		int its = 0;
@@ -514,12 +517,12 @@ bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>
 		{
 			for (l = nn; l >= 2; --l)
 			{
-				s = std::fabs(a[l - 1][l - 1]) + std::fabs(a[l][l]);
+				s = gm::fabs(a[l - 1][l - 1]) + gm::fabs(a[l][l]);
 				if (s == 0.0)
 				{
 					s = anorm;
 				}
-				if (std::fabs(a[l][l - 1]) + s == s)
+				if (gm::fabs(a[l][l - 1]) + s == s)
 				{
 					a[l][l - 1] = 0.0;
 					break;
@@ -540,11 +543,11 @@ bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>
 				{
 					p = 0.5 * (y - x);
 					q = p * p + w;
-					z = std::sqrt(std::fabs(q));
+					z = gm::sqrt(gm::fabs(q));
 					x += t;
 					if (q >= 0.0)
 					{
-						z = p + (p >= 0.0 ? std::fabs(z) : -std::fabs(z));
+						z = p + (p >= 0.0 ? gm::fabs(z) : -gm::fabs(z));
 						wr[nn - 1] = wr[nn] = x + z;
 						if (z != 0.0)
 						{
@@ -574,7 +577,7 @@ bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>
 						{
 							a[i][i] -= x;
 						}
-						s = std::fabs(a[nn][nn - 1]) + std::fabs(a[nn - 1][nn - 2]);
+						s = gm::fabs(a[nn][nn - 1]) + gm::fabs(a[nn - 1][nn - 2]);
 						y = x = 0.75 * s;
 						w = -0.4375 * s * s;
 					}
@@ -588,7 +591,7 @@ bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>
 						p = (r * s - w) / a[m + 1][m] + a[m][m + 1];
 						q = a[m + 1][m + 1] - z - r - s;
 						r = a[m + 2][m + 1];
-						s = std::fabs(p) + std::fabs(q) + std::fabs(r);
+						s = gm::fabs(p) + gm::fabs(q) + gm::fabs(r);
 						p /= s;
 						q /= s;
 						r /= s;
@@ -596,8 +599,8 @@ bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>
 						{
 							break;
 						}
-						const double u = std::fabs(a[m][m - 1]) * (std::fabs(q) + std::fabs(r));
-						const double v = std::fabs(p) * (std::fabs(a[m - 1][m - 1]) + std::fabs(z) + std::fabs(a[m + 1][m + 1]));
+						const Real u = gm::fabs(a[m][m - 1]) * (gm::fabs(q) + gm::fabs(r));
+						const Real v = gm::fabs(p) * (gm::fabs(a[m - 1][m - 1]) + gm::fabs(z) + gm::fabs(a[m + 1][m + 1]));
 						if (u + v == v)
 						{
 							break;
@@ -622,7 +625,7 @@ bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>
 							{
 								r = a[k + 2][k - 1];
 							}
-							x = std::fabs(p) + std::fabs(q) + std::fabs(r);
+							x = gm::fabs(p) + gm::fabs(q) + gm::fabs(r);
 							if (x != 0.0)
 							{
 								p /= x;
@@ -630,7 +633,7 @@ bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>
 								r /= x;
 							}
 						}
-						const double Root = std::sqrt(p * p + q * q + r * r);
+						const Real Root = gm::sqrt(p * p + q * q + r * r);
 						s = p >= 0.0 ? Root : -Root;
 						if (s != 0.0)
 						{
@@ -702,7 +705,7 @@ bool Eigenvalues(const Matrix& InA, std::vector<double>* Re, std::vector<double>
 	return true;
 }
 
-bool Svd(const Matrix& InA, Matrix* U, std::vector<double>* S, Matrix* Vt, std::string* Error)
+bool Svd(const Matrix& InA, Matrix* U, std::vector<Real>* S, Matrix* Vt, std::string* Error)
 {
 	if (InA.IsEmpty())
 	{
@@ -738,33 +741,33 @@ bool Svd(const Matrix& InA, Matrix* U, std::vector<double>* S, Matrix* Vt, std::
 		{
 			for (int q = p + 1; q < N; ++q)
 			{
-				double Alpha = 0.0, Beta = 0.0, Gamma = 0.0;
+				Real Alpha = 0.0, Beta = 0.0, Gamma = 0.0;
 				for (int i = 0; i < M; ++i)
 				{
 					Alpha += A(i, p) * A(i, p);
 					Beta += A(i, q) * A(i, q);
 					Gamma += A(i, p) * A(i, q);
 				}
-				if (std::fabs(Gamma) <= 1e-15 * std::sqrt(Alpha * Beta) || Gamma == 0.0)
+				if (gm::fabs(Gamma) <= 1e-15 * gm::sqrt(Alpha * Beta) || Gamma == 0.0)
 				{
 					continue;
 				}
 				Rotated = true;
-				const double Zeta = (Beta - Alpha) / (2.0 * Gamma);
-				const double T = (Zeta >= 0.0 ? 1.0 : -1.0) / (std::fabs(Zeta) + std::sqrt(1.0 + Zeta * Zeta));
-				const double C = 1.0 / std::sqrt(1.0 + T * T);
-				const double Sn = C * T;
+				const Real Zeta = (Beta - Alpha) / (2.0 * Gamma);
+				const Real T = (Zeta >= 0.0 ? 1.0 : -1.0) / (gm::fabs(Zeta) + gm::sqrt(1.0 + Zeta * Zeta));
+				const Real C = 1.0 / gm::sqrt(1.0 + T * T);
+				const Real Sn = C * T;
 				for (int i = 0; i < M; ++i)
 				{
-					const double Ap = A(i, p);
-					const double Aq = A(i, q);
+					const Real Ap = A(i, p);
+					const Real Aq = A(i, q);
 					A(i, p) = C * Ap - Sn * Aq;
 					A(i, q) = Sn * Ap + C * Aq;
 				}
 				for (int i = 0; i < N; ++i)
 				{
-					const double Vp = Vm(i, p);
-					const double Vq = Vm(i, q);
+					const Real Vp = Vm(i, p);
+					const Real Vq = Vm(i, q);
 					Vm(i, p) = C * Vp - Sn * Vq;
 					Vm(i, q) = Sn * Vp + C * Vq;
 				}
@@ -775,15 +778,15 @@ bool Svd(const Matrix& InA, Matrix* U, std::vector<double>* S, Matrix* Vt, std::
 			break;
 		}
 	}
-	std::vector<double> Sig(static_cast<size_t>(N));
+	std::vector<Real> Sig(static_cast<size_t>(N));
 	for (int j = 0; j < N; ++j)
 	{
-		double Nrm = 0.0;
+		Real Nrm = 0.0;
 		for (int i = 0; i < M; ++i)
 		{
 			Nrm += A(i, j) * A(i, j);
 		}
-		Sig[static_cast<size_t>(j)] = std::sqrt(Nrm);
+		Sig[static_cast<size_t>(j)] = gm::sqrt(Nrm);
 	}
 	std::vector<int> Order(static_cast<size_t>(N));
 	for (int i = 0; i < N; ++i)
@@ -796,7 +799,7 @@ bool Svd(const Matrix& InA, Matrix* U, std::vector<double>* S, Matrix* Vt, std::
 	for (int c = 0; c < N; ++c)
 	{
 		const int Src = Order[static_cast<size_t>(c)];
-		const double Sv = Sig[static_cast<size_t>(Src)];
+		const Real Sv = Sig[static_cast<size_t>(Src)];
 		(*S)[static_cast<size_t>(c)] = Sv;
 		for (int i = 0; i < M; ++i)
 		{
@@ -826,17 +829,17 @@ bool LeastSquares(const Matrix& A, const Matrix& B, Matrix* X, std::string* Erro
 		return false;
 	}
 	Matrix U, Vt;
-	std::vector<double> S;
+	std::vector<Real> S;
 	if (!Svd(A, &U, &S, &Vt, Error))
 	{
 		return false;
 	}
-	const double Tol = static_cast<double>(std::max(A.Rows, A.Cols)) * kEps * (S.empty() ? 0.0 : S[0]);
+	const Real Tol = static_cast<Real>(std::max(A.Rows, A.Cols)) * Eps() * (S.empty() ? 0.0 : S[0]);
 	// X = V S^+ U^T B
 	Matrix UtB = Mul(Transpose(U), B);
 	for (int i = 0; i < UtB.Rows; ++i)
 	{
-		const double Sv = S[static_cast<size_t>(i)];
+		const Real Sv = S[static_cast<size_t>(i)];
 		for (int j = 0; j < UtB.Cols; ++j)
 		{
 			UtB(i, j) = Sv > Tol ? UtB(i, j) / Sv : 0.0;
@@ -853,12 +856,12 @@ bool Expm(const Matrix& InA, Matrix* Out, std::string* Error)
 		SetError(Error, "expm needs a square matrix");
 		return false;
 	}
-	static const double B[14] = {64764752532480000.0, 32382376266240000.0, 7771770303897600.0, 1187353796428800.0, 129060195264000.0,
+	static const Real B[14] = {64764752532480000.0, 32382376266240000.0, 7771770303897600.0, 1187353796428800.0, 129060195264000.0,
 		10559470521600.0, 670442572800.0, 33522128640.0, 1323241920.0, 40840800.0, 960960.0, 16380.0, 182.0, 1.0};
-	const double Theta13 = 5.371920351148152;
+	const Real Theta13 = 5.371920351148152;
 	const int N = InA.Rows;
-	const double Nrm = Norm1(InA);
-	if (!std::isfinite(Nrm))
+	const Real Nrm = Norm1(InA);
+	if (!gm::isfinite(Nrm))
 	{
 		SetError(Error, "expm of a non-finite matrix");
 		return false;
@@ -866,7 +869,7 @@ bool Expm(const Matrix& InA, Matrix* Out, std::string* Error)
 	int Squarings = 0;
 	if (Nrm > Theta13)
 	{
-		Squarings = static_cast<int>(std::ceil(std::log2(Nrm / Theta13)));
+		Squarings = gm::ceil(gm::log2(Nrm / Theta13)).ToInt();
 	}
 	const Matrix A = Scale(InA, std::ldexp(1.0, -Squarings));
 	const Matrix I = Matrix::Identity(N);
@@ -889,38 +892,38 @@ bool Expm(const Matrix& InA, Matrix* Out, std::string* Error)
 	return true;
 }
 
-double SpectralRadius(const Matrix& A)
+Real SpectralRadius(const Matrix& A)
 {
-	std::vector<double> Re, Im;
+	std::vector<Real> Re, Im;
 	if (!Eigenvalues(A, &Re, &Im, nullptr))
 	{
-		return std::numeric_limits<double>::quiet_NaN();
+		return Real::NaN();
 	}
-	double Rho = 0.0;
+	Real Rho = 0.0;
 	for (size_t i = 0; i < Re.size(); ++i)
 	{
-		Rho = std::max(Rho, std::hypot(Re[i], Im[i]));
+		Rho = std::max(Rho, gm::hypot(Re[i], Im[i]));
 	}
 	return Rho;
 }
 
-int Rank(const Matrix& A, double Tol)
+int Rank(const Matrix& A, Real Tol)
 {
 	if (A.IsEmpty())
 	{
 		return 0;
 	}
-	std::vector<double> S;
+	std::vector<Real> S;
 	if (!Svd(A, nullptr, &S, nullptr, nullptr))
 	{
 		return 0;
 	}
 	if (Tol < 0.0)
 	{
-		Tol = static_cast<double>(std::max(A.Rows, A.Cols)) * kEps * (S.empty() ? 0.0 : S[0]);
+		Tol = static_cast<Real>(std::max(A.Rows, A.Cols)) * Eps() * (S.empty() ? 0.0 : S[0]);
 	}
 	int R = 0;
-	for (double Sv : S)
+	for (Real Sv : S)
 	{
 		if (Sv > Tol)
 		{
@@ -981,12 +984,12 @@ bool Dare(const Matrix& A, const Matrix& B, const Matrix& Q, const Matrix& R, Ma
 		Matrix Hn = Symmetrize(Add(Hk, Mul(Mul(Transpose(Ak), Hk), WiA)));
 		Matrix Gn = Symmetrize(Add(Gk, Mul(Mul(Ak, WiG), Transpose(Ak))));
 		Matrix An = Mul(Ak, WiA);
-		const double Change = MaxAbs(Sub(Hn, Hk));
-		const double Size = std::max(1.0, MaxAbs(Hn));
+		const Real Change = MaxAbs(Sub(Hn, Hk));
+		const Real Size = gm::max(Real(1), MaxAbs(Hn));
 		Ak = An;
 		Gk = Gn;
 		Hk = Hn;
-		if (!std::isfinite(Change))
+		if (!gm::isfinite(Change))
 		{
 			break;
 		}
@@ -1050,17 +1053,17 @@ bool Care(const Matrix& A, const Matrix& B, const Matrix& Q, const Matrix& R, Ma
 			SetError(Error, "care: Hamiltonian has eigenvalues on the imaginary axis");
 			return false;
 		}
-		double D = 0.0;
+		Real D = 0.0;
 		Determinant(Z, &D, nullptr);
-		double C = std::pow(std::fabs(D), -1.0 / (2.0 * N));
-		if (!std::isfinite(C) || C <= 0.0)
+		Real C = gm::pow(gm::fabs(D), -1.0 / (2.0 * N));
+		if (!gm::isfinite(C) || C <= 0.0)
 		{
 			C = 1.0;
 		}
 		Matrix Zn = Scale(Add(Scale(Z, C), Scale(Zi, 1.0 / C)), 0.5);
-		const double Change = MaxAbs(Sub(Zn, Z));
+		const Real Change = MaxAbs(Sub(Zn, Z));
 		Z = Zn;
-		if (Change <= 1e-13 * std::max(1.0, MaxAbs(Z)))
+		if (Change <= 1e-13 * gm::max(Real(1), MaxAbs(Z)))
 		{
 			Converged = true;
 			break;

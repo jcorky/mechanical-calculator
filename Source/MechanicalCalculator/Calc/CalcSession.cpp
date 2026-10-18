@@ -41,7 +41,7 @@ enum class Tok
 struct Token
 {
 	Tok Kind = Tok::End;
-	double Number = 0.0;
+	Real Number = 0.0;
 	std::string Text;
 	size_t Pos = 0;
 };
@@ -73,10 +73,9 @@ std::vector<Token> Lex(const std::string& S)
 		const bool DotDigit = Ch == '.' && i + 1 < S.size() && std::isdigit(static_cast<unsigned char>(S[i + 1])) != 0;
 		if (std::isdigit(static_cast<unsigned char>(Ch)) != 0 || DotDigit)
 		{
-			const char* Begin = S.c_str() + i;
-			char* EndPtr = nullptr;
-			T.Number = std::strtod(Begin, &EndPtr);
-			size_t Len = static_cast<size_t>(EndPtr - Begin);
+			// Entered digit for digit into the setting register (18 significant digits).
+			size_t Len = 0;
+			T.Number = Real::Parse(S.c_str() + i, &Len);
 			if (Len == 0)
 			{
 				Len = 1;
@@ -138,31 +137,31 @@ std::vector<Token> Lex(const std::string& S)
 	return Out;
 }
 
-bool Constant(const std::string& Name, double* Out)
+bool Constant(const std::string& Name, Real* Out)
 {
 	struct Entry
 	{
 		const char* Name;
-		double X;
+		Real X;
 	};
 	static const Entry Table[] = {
-		{"pi", cst::Pi},
-		{"tau", cst::Tau},
-		{"e", 2.71828182845904523536},
-		{"inf", std::numeric_limits<double>::infinity()},
-		{"nan", std::numeric_limits<double>::quiet_NaN()},
-		{"g0", cst::G0},
-		{"c0", cst::C},
-		{"kB", cst::Boltzmann},
-		{"T0", cst::T0Noise},
-		{"mu_earth", cst::MuEarth},
-		{"R_earth", cst::REarth},
-		{"gamma_air", cst::GammaAir},
-		{"cp_air", cst::CpAir},
-		{"R_air", cst::RAir},
+		{"pi", cst::Pi()},
+		{"tau", cst::Tau()},
+		{"e", gm::exp(Real(1))},
+		{"inf", Real::Infinity()},
+		{"nan", Real::NaN()},
+		{"g0", cst::G0()},
+		{"c0", cst::C()},
+		{"kB", cst::Boltzmann()},
+		{"T0", cst::T0Noise()},
+		{"mu_earth", cst::MuEarth()},
+		{"R_earth", cst::REarth()},
+		{"gamma_air", cst::GammaAir()},
+		{"cp_air", cst::CpAir()},
+		{"R_air", cst::RAir()},
 		{"ft", 0.3048},
 		{"nmi", 1852.0},
-		{"kt", 1852.0 / 3600.0},
+		{"kt", Real(1852) / Real(3600)},
 		{"km", 1000.0},
 		{"hr", 3600.0},
 		{"day", 86400.0},
@@ -187,12 +186,12 @@ std::string Shape(const Matrix& M)
 }
 
 // Element-wise binary operation with scalar broadcasting.
-bool Elementwise(const Matrix& A, const Matrix& B, double (*Op)(double, double), Matrix* Out, std::string* Error, const char* What)
+bool Elementwise(const Matrix& A, const Matrix& B, Real (*Op)(Real, Real), Matrix* Out, std::string* Error, const char* What)
 {
 	if (A.IsScalar() && !B.IsScalar())
 	{
 		Matrix C = B;
-		for (double& X : C.V)
+		for (Real& X : C.V)
 		{
 			X = Op(A.V[0], X);
 		}
@@ -202,7 +201,7 @@ bool Elementwise(const Matrix& A, const Matrix& B, double (*Op)(double, double),
 	if (B.IsScalar())
 	{
 		Matrix C = A;
-		for (double& X : C.V)
+		for (Real& X : C.V)
 		{
 			X = Op(X, B.V[0]);
 		}
@@ -223,11 +222,11 @@ bool Elementwise(const Matrix& A, const Matrix& B, double (*Op)(double, double),
 	return true;
 }
 
-double OpAdd(double A, double B) { return A + B; }
-double OpSub(double A, double B) { return A - B; }
-double OpMul(double A, double B) { return A * B; }
-double OpDiv(double A, double B) { return A / B; }
-double OpPow(double A, double B) { return std::pow(A, B); }
+Real OpAdd(Real A, Real B) { return A + B; }
+Real OpSub(Real A, Real B) { return A - B; }
+Real OpMul(Real A, Real B) { return A * B; }
+Real OpDiv(Real A, Real B) { return A / B; }
+Real OpPow(Real A, Real B) { return gm::pow(A, B); }
 
 class Parser
 {
@@ -394,7 +393,7 @@ private:
 		if (Accept(Tok::Minus))
 		{
 			Value V = Unary();
-			for (double& X : V.M.V)
+			for (Real& X : V.M.V)
 			{
 				X = -X;
 			}
@@ -437,8 +436,8 @@ private:
 			Fail("^: use a square matrix and a scalar power (or .^ for element-wise)");
 			return Base;
 		}
-		const double P = Exp.Scalar();
-		if (P != std::floor(P) || std::fabs(P) > 1e6)
+		const Real P = Exp.Scalar();
+		if (P != gm::floor(P) || gm::fabs(P) > 1e6)
 		{
 			Fail("^: a matrix power must be an integer (or use expm)");
 			return Base;
@@ -451,7 +450,7 @@ private:
 				return Base;
 			}
 		}
-		long long N = static_cast<long long>(std::fabs(P));
+		long long N = gm::fabs(P).ToLong();
 		Matrix R = Matrix::Identity(B.Rows);
 		while (N > 0)
 		{
@@ -469,12 +468,12 @@ private:
 	{
 		const Matrix& M = Base.M;
 		auto ToIdx = [this](const Value& V, int Limit, int* Idx) {
-			if (!V.IsScalar() || V.Scalar() != std::floor(V.Scalar()))
+			if (!V.IsScalar() || V.Scalar() != gm::floor(V.Scalar()))
 			{
 				Fail("index must be a whole number");
 				return false;
 			}
-			const int I = static_cast<int>(V.Scalar());
+			const int I = V.Scalar().ToInt();
 			if (I < 1 || I > Limit)
 			{
 				Fail("index " + std::to_string(I) + " out of range 1.." + std::to_string(Limit));
@@ -552,7 +551,7 @@ private:
 		}
 		if ((F.Angle & AngleArgs) != 0 && !Args.empty())
 		{
-			for (double& X : Args[0].M.V)
+			for (Real& X : Args[0].M.V)
 			{
 				X = S.ToRadians(X);
 			}
@@ -565,7 +564,7 @@ private:
 		}
 		if ((F.Angle & AngleResult) != 0)
 		{
-			for (double& X : R.Val.M.V)
+			for (Real& X : R.Val.M.V)
 			{
 				X = S.FromRadians(X);
 			}
@@ -584,9 +583,9 @@ private:
 			}
 			else if (Accept(Tok::Bang))
 			{
-				for (double& X : V.M.V)
+				for (Real& X : V.M.V)
 				{
-					X = std::tgamma(X + 1.0);
+					X = gm::tgamma(X + 1.0);
 				}
 				V.Fields.clear();
 			}
@@ -776,7 +775,7 @@ private:
 				}
 				return CallFunction(*F, Args);
 			}
-			double X = 0.0;
+			Real X = 0.0;
 			if (Constant(Tk.Text, &X))
 			{
 				return Value(X);
@@ -892,14 +891,14 @@ Session::Session() : Session(Registry::Default()) {}
 
 Session::Session(const Registry& InRegistry) : Reg(&InRegistry) {}
 
-double Session::ToRadians(double X) const
+Real Session::ToRadians(Real X) const
 {
-	return Angles == AngleMode::Degrees ? X * cst::Pi / 180.0 : X;
+	return Angles == AngleMode::Degrees ? X * cst::Pi() / 180.0 : X;
 }
 
-double Session::FromRadians(double X) const
+Real Session::FromRadians(Real X) const
 {
-	return Angles == AngleMode::Degrees ? X * 180.0 / cst::Pi : X;
+	return Angles == AngleMode::Degrees ? X * 180.0 / cst::Pi() : X;
 }
 
 bool Session::GetVariable(const std::string& Name, Value* Out) const
@@ -918,42 +917,10 @@ void Session::SetVariable(const std::string& Name, const Value& V)
 	Vars[Name] = V;
 }
 
-std::string Session::FormatNumber(double X) const
+std::string Session::FormatNumber(Real X) const
 {
-	if (std::isnan(X))
-	{
-		return "nan";
-	}
-	if (std::isinf(X))
-	{
-		return X > 0 ? "inf" : "-inf";
-	}
-	if (X == 0.0)
-	{
-		return "0";
-	}
-	char Buf[64];
-	std::snprintf(Buf, sizeof(Buf), "%.*g", Digits, X);
-	std::string S = Buf;
-	// 1.5e+06 -> 1.5e6, 2e-07 -> 2e-7
-	const size_t E = S.find('e');
-	if (E != std::string::npos)
-	{
-		std::string Mant = S.substr(0, E);
-		std::string Exp = S.substr(E + 1);
-		std::string Sign;
-		if (!Exp.empty() && (Exp[0] == '+' || Exp[0] == '-'))
-		{
-			Sign = Exp[0] == '-' ? "-" : "";
-			Exp.erase(0, 1);
-		}
-		while (Exp.size() > 1 && Exp[0] == '0')
-		{
-			Exp.erase(0, 1);
-		}
-		S = Mant + "e" + Sign + Exp;
-	}
-	return S;
+	// Read straight off the result wheels, rounded to the display digits.
+	return X.ToString(Digits);
 }
 
 std::vector<std::string> Session::Format(const Value& V, int Width) const
@@ -986,13 +953,13 @@ std::vector<std::string> Session::Format(const Value& V, int Width) const
 	std::vector<size_t> ColW(static_cast<size_t>(M.Cols), 0);
 	std::vector<std::string> Cells(M.V.size());
 	// Round-off next to the matrix's largest entry prints as 0 (display only; the value keeps it).
-	const double Chop = 1e-13 * la::MaxAbs(M);
+	const Real Chop = 1e-13 * la::MaxAbs(M);
 	for (int i = 0; i < M.Rows; ++i)
 	{
 		for (int j = 0; j < M.Cols; ++j)
 		{
 			const size_t Idx = static_cast<size_t>(i * M.Cols + j);
-			Cells[Idx] = FormatNumber(std::fabs(M(i, j)) < Chop ? 0.0 : M(i, j));
+			Cells[Idx] = FormatNumber(gm::fabs(M(i, j)) < Chop ? 0.0 : M(i, j));
 			ColW[static_cast<size_t>(j)] = std::max(ColW[static_cast<size_t>(j)], Cells[Idx].size());
 		}
 	}
@@ -1139,7 +1106,7 @@ bool Session::RunCommand(const std::string& Line, Outcome* Out)
 		const FunctionInfo* F = Reg->Find(Arg);
 		if (!F)
 		{
-			double X = 0.0;
+			Real X = 0.0;
 			if (Constant(Arg, &X))
 			{
 				Say(Arg + " = " + FormatNumber(X) + " (constant)");
@@ -1210,7 +1177,7 @@ Outcome Session::Execute(const std::string& RawLine)
 		{
 			Target = Tokens[0].Text;
 			Skip = 2;
-			double Unused = 0.0;
+			Real Unused = 0.0;
 			if (Reg->Find(Target) || Constant(Target, &Unused) || Target == "ans")
 			{
 				Out.Ok = false;

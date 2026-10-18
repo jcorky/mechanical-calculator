@@ -16,7 +16,7 @@ double Eval(Session& S, const char* Line)
 		std::printf("    '%s' -> %s\n", Line, O.Text.c_str());
 		return std::nan("");
 	}
-	return O.Val.Scalar();
+	return O.Val.Scalar().ToDouble();
 }
 
 bool Rejects(Session& S, const char* Line)
@@ -26,7 +26,7 @@ bool Rejects(Session& S, const char* Line)
 
 double Residual(const Matrix& A, const Matrix& B)
 {
-	return la::MaxAbs(la::Sub(A, B));
+	return la::MaxAbs(la::Sub(A, B)).ToDouble();
 }
 } // namespace
 
@@ -141,7 +141,7 @@ TEST(linear_algebra_solve_inverse_det)
 	Matrix Ai, X;
 	CHECK(la::Inverse(A, &Ai, nullptr));
 	CHECK(Residual(la::Mul(A, Ai), Matrix::Identity(3)) < 1e-14);
-	double D = 0;
+	mcalc::Real D = 0;
 	CHECK(la::Determinant(A, &D, nullptr));
 	CHECK_NEAR(D, 36, 1e-12);
 	std::string E;
@@ -159,7 +159,7 @@ TEST(linear_algebra_solve_inverse_det)
 
 TEST(linear_algebra_eigen_svd)
 {
-	std::vector<double> W, Re, Im, S;
+	std::vector<mcalc::Real> W, Re, Im, S;
 	Matrix V, U, Vt;
 	const Matrix A = Matrix::FromRows({{2, 1, 0}, {1, 3, 1}, {0, 1, 4}});
 	CHECK(la::SymmetricEigen(A, &W, &V, nullptr));

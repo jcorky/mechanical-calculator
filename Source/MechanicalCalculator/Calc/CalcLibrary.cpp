@@ -17,7 +17,7 @@ int Value::FieldIndex(const std::string& Name) const
 	return -1;
 }
 
-Result Result::Record(const std::vector<std::pair<std::string, double>>& Items)
+Result Result::Record(const std::vector<std::pair<std::string, Real>>& Items)
 {
 	Result R;
 	R.Val.M = Matrix(1, static_cast<int>(Items.size()));
@@ -31,12 +31,12 @@ Result Result::Record(const std::vector<std::pair<std::string, double>>& Items)
 
 int Call::Int(size_t I) const
 {
-	const double X = N(I);
-	if (!std::isfinite(X))
+	const Real X = N(I);
+	if (!gm::isfinite(X))
 	{
 		return 0;
 	}
-	return static_cast<int>(std::lround(X));
+	return static_cast<int>(gm::lround(X));
 }
 
 std::string FunctionInfo::Signature() const

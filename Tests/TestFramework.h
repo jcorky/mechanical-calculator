@@ -1,6 +1,8 @@
 // A minimal test framework: TEST(name) { ... } registers a test; CHECK and CHECK_NEAR record failures.
 #pragma once
 
+#include "GearReal.h"
+
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -43,6 +45,16 @@ inline void Fail(const char* File, int Line, const std::string& What)
 	std::printf("  FAIL %s:%d: %s\n", File, Line, What.c_str());
 }
 
+// Values read off the gear machine compare as doubles in CHECK_NEAR.
+inline double AsDouble(double X)
+{
+	return X;
+}
+inline double AsDouble(const mcalc::Real& X)
+{
+	return X.ToDouble();
+}
+
 inline bool Near(double A, double B, double Tol)
 {
 	if (std::isnan(A) && std::isnan(B))
@@ -74,11 +86,11 @@ inline bool Near(double A, double B, double Tol)
 	do                                                               \
 	{                                                                \
 		++mtest::Checks();                                           \
-		const double CheckA_ = (A), CheckB_ = (B);                   \
-		if (!mtest::Near(CheckA_, CheckB_, (Tol)))                   \
+		const double CheckA_ = mtest::AsDouble(A), CheckB_ = mtest::AsDouble(B);                   \
+		if (!mtest::Near(CheckA_, CheckB_, mtest::AsDouble(Tol)))                   \
 		{                                                            \
 			char Buf_[256];                                          \
-			std::snprintf(Buf_, sizeof(Buf_), "%s = %.17g, expected %.17g (tol %g)", #A, CheckA_, CheckB_, static_cast<double>(Tol)); \
+			std::snprintf(Buf_, sizeof(Buf_), "%s = %.17g, expected %.17g (tol %g)", #A, CheckA_, CheckB_, mtest::AsDouble(Tol)); \
 			mtest::Fail(__FILE__, __LINE__, Buf_);                   \
 		}                                                            \
 	} while (0)

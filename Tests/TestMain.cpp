@@ -4,7 +4,7 @@
 // The expression is typed into a fresh calculator Session exactly as on the keyboard; its value
 // (a scalar) must match `expected` within `tolerance`, written "rel:1e-9" or "abs:1e-6". An expected
 // value of "error" means the line must be rejected. Lines starting with '#' are comments.
-// The .tsv files are generated from Where It Isn't's own JavaScript modules by Tests/reference/build.mjs.
+// MCALC_CASES=<file>.tsv runs one file. The .tsv files are generated from Where It Isn't's own JavaScript modules by Tests/reference/build.mjs.
 #include "CalcSession.h"
 #include "TestFramework.h"
 
@@ -32,9 +32,10 @@ int RunReferenceCases(int* Total)
 {
 	int Failed = 0;
 	std::vector<std::filesystem::path> Files;
+	const char* Only = std::getenv("MCALC_CASES");   // e.g. MCALC_CASES=orbits.tsv
 	for (const auto& Entry : std::filesystem::directory_iterator(MCALC_CASES_DIR))
 	{
-		if (Entry.path().extension() == ".tsv")
+		if (Entry.path().extension() == ".tsv" && (!Only || Entry.path().filename() == Only))
 		{
 			Files.push_back(Entry.path());
 		}
@@ -76,19 +77,26 @@ int RunReferenceCases(int* Total)
 			}
 			else
 			{
-				const double Expected = std::strtod(Cells[1].c_str(), nullptr);
-				const double Value = O.Val.Scalar();
+				// Compared on the machine: the expected value is entered exactly as printed.
+				size_t Used = 0;
+				const mcalc::Real Expected = mcalc::Real::Parse(Cells[1].c_str(), &Used);
+				const mcalc::Real Value = O.Val.Scalar();
 				const std::string& T = Cells[2];
-				const double Tol = std::strtod(T.c_str() + 4, nullptr);
-				double Allowed = Tol;
-				if (T.compare(0, 4, "rel:") == 0)
+				const mcalc::Real Tol = mcalc::Real::Parse(T.c_str() + 4, &Used);
+				const mcalc::Real Allowed = T.compare(0, 4, "rel:") == 0 ? Tol * mcalc::Real::Abs(Expected) : Tol;
+				if (Value.IsNaN() || Expected.IsNaN())
 				{
-					Allowed = Tol * std::fabs(Expected);
+					Pass = Value.IsNaN() && Expected.IsNaN();
 				}
-				Pass = mtest::Near(Value, Expected, Allowed);
-				char Buf[64];
-				std::snprintf(Buf, sizeof(Buf), "%.17g", Value);
-				Got = Buf;
+				else if (Value.IsInf() || Expected.IsInf())
+				{
+					Pass = Value == Expected;
+				}
+				else
+				{
+					Pass = mcalc::Real::Abs(Value - Expected) <= Allowed;
+				}
+				Got = Value.ToString(18);
 			}
 			if (!Pass)
 			{

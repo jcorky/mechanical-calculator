@@ -10,142 +10,142 @@ namespace mcalc
 {
 namespace builtins_detail
 {
-template <double (*F)(double)>
+template <Real (*F)(Real)>
 Result Map1(const Call& C)
 {
 	Matrix M = C.M(0);
-	for (double& X : M.V)
+	for (Real& X : M.V)
 	{
 		X = F(X);
 	}
 	return Result::Of(M);
 }
 
-double FSin(double X) { return std::sin(X); }
-double FCos(double X) { return std::cos(X); }
-double FTan(double X) { return std::tan(X); }
-double FAsin(double X) { return std::asin(X); }
-double FAcos(double X) { return std::acos(X); }
-double FAtan(double X) { return std::atan(X); }
-double FSinh(double X) { return std::sinh(X); }
-double FCosh(double X) { return std::cosh(X); }
-double FTanh(double X) { return std::tanh(X); }
-double FAsinh(double X) { return std::asinh(X); }
-double FAcosh(double X) { return std::acosh(X); }
-double FAtanh(double X) { return std::atanh(X); }
-double FExp(double X) { return std::exp(X); }
-double FLn(double X) { return std::log(X); }
-double FLog10(double X) { return std::log10(X); }
-double FLog2(double X) { return std::log2(X); }
-double FSqrt(double X) { return std::sqrt(X); }
-double FCbrt(double X) { return std::cbrt(X); }
-double FAbs(double X) { return std::fabs(X); }
-double FFloor(double X) { return std::floor(X); }
-double FCeil(double X) { return std::ceil(X); }
-double FRound(double X) { return std::round(X); }
-double FTrunc(double X) { return std::trunc(X); }
-double FSign(double X) { return X > 0 ? 1.0 : (X < 0 ? -1.0 : 0.0); }
-double FGamma(double X) { return std::tgamma(X); }
-double FLgamma(double X) { return std::lgamma(X); }
-double FErf(double X) { return std::erf(X); }
-double FErfc(double X) { return std::erfc(X); }
-double FDeg(double X) { return X * 180.0 / cst::Pi; }
-double FRad(double X) { return X * cst::Pi / 180.0; }
-double FDb(double X) { return 10.0 * std::log10(X); }
-double FUndb(double X) { return std::pow(10.0, X / 10.0); }
-double FFact(double X) { return std::tgamma(X + 1.0); }
+Real FSin(Real X) { return gm::sin(X); }
+Real FCos(Real X) { return gm::cos(X); }
+Real FTan(Real X) { return gm::tan(X); }
+Real FAsin(Real X) { return gm::asin(X); }
+Real FAcos(Real X) { return gm::acos(X); }
+Real FAtan(Real X) { return gm::atan(X); }
+Real FSinh(Real X) { return gm::sinh(X); }
+Real FCosh(Real X) { return gm::cosh(X); }
+Real FTanh(Real X) { return gm::tanh(X); }
+Real FAsinh(Real X) { return gm::asinh(X); }
+Real FAcosh(Real X) { return gm::acosh(X); }
+Real FAtanh(Real X) { return gm::atanh(X); }
+Real FExp(Real X) { return gm::exp(X); }
+Real FLn(Real X) { return gm::log(X); }
+Real FLog10(Real X) { return gm::log10(X); }
+Real FLog2(Real X) { return gm::log2(X); }
+Real FSqrt(Real X) { return gm::sqrt(X); }
+Real FCbrt(Real X) { return gm::cbrt(X); }
+Real FAbs(Real X) { return gm::fabs(X); }
+Real FFloor(Real X) { return gm::floor(X); }
+Real FCeil(Real X) { return gm::ceil(X); }
+Real FRound(Real X) { return gm::round(X); }
+Real FTrunc(Real X) { return gm::trunc(X); }
+Real FSign(Real X) { return X > 0 ? 1.0 : (X < 0 ? -1.0 : 0.0); }
+Real FGamma(Real X) { return gm::tgamma(X); }
+Real FLgamma(Real X) { return gm::lgamma(X); }
+Real FErf(Real X) { return gm::erf(X); }
+Real FErfc(Real X) { return gm::erfc(X); }
+Real FDeg(Real X) { return X * 180.0 / cst::Pi(); }
+Real FRad(Real X) { return X * cst::Pi() / 180.0; }
+Real FDb(Real X) { return 10.0 * gm::log10(X); }
+Real FUndb(Real X) { return gm::pow(10.0, X / 10.0); }
+Real FFact(Real X) { return gm::tgamma(X + 1.0); }
 // Standard normal CDF and its inverse (Acklam's rational approximation refined by one Halley step).
-double FNormcdf(double X) { return 0.5 * std::erfc(-X / std::sqrt(2.0)); }
-double FNorminv(double P)
+Real FNormcdf(Real X) { return 0.5 * gm::erfc(-X / gm::sqrt(2.0)); }
+Real FNorminv(Real P)
 {
 	if (P <= 0.0)
 	{
-		return -std::numeric_limits<double>::infinity();
+		return -Real::Infinity();
 	}
 	if (P >= 1.0)
 	{
-		return std::numeric_limits<double>::infinity();
+		return Real::Infinity();
 	}
-	static const double A[] = {-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00};
-	static const double B[] = {-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01};
-	static const double Cc[] = {-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00};
-	static const double D[] = {7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00};
-	double X = 0.0;
+	static const Real A[] = {-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00};
+	static const Real B[] = {-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01};
+	static const Real Cc[] = {-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00};
+	static const Real D[] = {7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00};
+	Real X = 0.0;
 	if (P < 0.02425)
 	{
-		const double Q = std::sqrt(-2.0 * std::log(P));
+		const Real Q = gm::sqrt(-2.0 * gm::log(P));
 		X = (((((Cc[0] * Q + Cc[1]) * Q + Cc[2]) * Q + Cc[3]) * Q + Cc[4]) * Q + Cc[5]) / ((((D[0] * Q + D[1]) * Q + D[2]) * Q + D[3]) * Q + 1.0);
 	}
 	else if (P > 1.0 - 0.02425)
 	{
-		const double Q = std::sqrt(-2.0 * std::log(1.0 - P));
+		const Real Q = gm::sqrt(-2.0 * gm::log(1.0 - P));
 		X = -(((((Cc[0] * Q + Cc[1]) * Q + Cc[2]) * Q + Cc[3]) * Q + Cc[4]) * Q + Cc[5]) / ((((D[0] * Q + D[1]) * Q + D[2]) * Q + D[3]) * Q + 1.0);
 	}
 	else
 	{
-		const double Q = P - 0.5, R = Q * Q;
+		const Real Q = P - 0.5, R = Q * Q;
 		X = (((((A[0] * R + A[1]) * R + A[2]) * R + A[3]) * R + A[4]) * R + A[5]) * Q / (((((B[0] * R + B[1]) * R + B[2]) * R + B[3]) * R + B[4]) * R + 1.0);
 	}
-	const double E = FNormcdf(X) - P;
-	const double U = E * std::sqrt(2.0 * cst::Pi) * std::exp(X * X / 2.0);
+	const Real E = FNormcdf(X) - P;
+	const Real U = E * gm::sqrt(2.0 * cst::Pi()) * gm::exp(X * X / 2.0);
 	return X - U / (1.0 + X * U / 2.0);
 }
 
-Result Atan2(const Call& C) { return Result::Of(std::atan2(C.N(0), C.N(1))); }
-Result Hypot(const Call& C) { return Result::Of(std::hypot(C.N(0), C.N(1))); }
+Result Atan2(const Call& C) { return Result::Of(gm::atan2(C.N(0), C.N(1))); }
+Result Hypot(const Call& C) { return Result::Of(gm::hypot(C.N(0), C.N(1))); }
 Result Mod(const Call& C)
 {
-	const double A = C.N(0), B = C.N(1);
+	const Real A = C.N(0), B = C.N(1);
 	if (B == 0.0)
 	{
 		return Result::Of(A);
 	}
-	return Result::Of(A - B * std::floor(A / B));
+	return Result::Of(A - B * gm::floor(A / B));
 }
-Result Rem(const Call& C) { return Result::Of(std::fmod(C.N(0), C.N(1))); }
-Result Log(const Call& C) { return Result::Of(std::log(C.N(0)) / std::log(C.N(1))); }
+Result Rem(const Call& C) { return Result::Of(gm::fmod(C.N(0), C.N(1))); }
+Result Log(const Call& C) { return Result::Of(C.N(1).IsZero() ? gm::log(C.N(0)) : gm::log(C.N(0)) / gm::log(C.N(1))); }
 Result Root(const Call& C)
 {
-	const double X = C.N(0), N = C.N(1);
-	if (X < 0 && std::fmod(N, 2.0) == 1.0)
+	const Real X = C.N(0), N = C.N(1);
+	if (X < 0 && gm::fmod(N, 2.0) == 1.0)
 	{
-		return Result::Of(-std::pow(-X, 1.0 / N));
+		return Result::Of(-gm::pow(-X, 1.0 / N));
 	}
-	return Result::Of(std::pow(X, 1.0 / N));
+	return Result::Of(gm::pow(X, 1.0 / N));
 }
 
 Result NChooseK(const Call& C)
 {
-	const double N = C.N(0), K = C.N(1);
+	const Real N = C.N(0), K = C.N(1);
 	if (K < 0 || K > N)
 	{
 		return Result::Of(0.0);
 	}
-	return Result::Of(std::round(std::exp(std::lgamma(N + 1) - std::lgamma(K + 1) - std::lgamma(N - K + 1))));
+	return Result::Of(gm::round(gm::exp(gm::lgamma(N + 1) - gm::lgamma(K + 1) - gm::lgamma(N - K + 1))));
 }
 Result NPermK(const Call& C)
 {
-	const double N = C.N(0), K = C.N(1);
+	const Real N = C.N(0), K = C.N(1);
 	if (K < 0 || K > N)
 	{
 		return Result::Of(0.0);
 	}
-	return Result::Of(std::round(std::exp(std::lgamma(N + 1) - std::lgamma(N - K + 1))));
+	return Result::Of(gm::round(gm::exp(gm::lgamma(N + 1) - gm::lgamma(N - K + 1))));
 }
 Result Gcd(const Call& C)
 {
-	long long A = std::llabs(std::llround(C.N(0))), B = std::llabs(std::llround(C.N(1)));
+	long long A = std::llabs(gm::llround(C.N(0))), B = std::llabs(gm::llround(C.N(1)));
 	while (B != 0)
 	{
 		const long long T = A % B;
 		A = B;
 		B = T;
 	}
-	return Result::Of(static_cast<double>(A));
+	return Result::Of(static_cast<Real>(A));
 }
 Result Lcm(const Call& C)
 {
-	const long long A = std::llabs(std::llround(C.N(0))), B = std::llabs(std::llround(C.N(1)));
+	const long long A = std::llabs(gm::llround(C.N(0))), B = std::llabs(gm::llround(C.N(1)));
 	if (A == 0 || B == 0)
 	{
 		return Result::Of(0.0);
@@ -157,13 +157,13 @@ Result Lcm(const Call& C)
 		X = Y;
 		Y = T;
 	}
-	return Result::Of(static_cast<double>(A / X * B));
+	return Result::Of(static_cast<Real>(A / X * B));
 }
 
 // Variadic min/max: min(v) over the elements, or min(a, b, ...) over scalars.
-std::vector<double> Flatten(const Call& C)
+std::vector<Real> Flatten(const Call& C)
 {
-	std::vector<double> All;
+	std::vector<Real> All;
 	for (size_t i = 0; i < C.Count(); ++i)
 	{
 		All.insert(All.end(), C.M(i).V.begin(), C.M(i).V.end());
@@ -172,7 +172,7 @@ std::vector<double> Flatten(const Call& C)
 }
 Result Min(const Call& C)
 {
-	const std::vector<double> A = Flatten(C);
+	const std::vector<Real> A = Flatten(C);
 	if (A.empty())
 	{
 		return Result::Fail("needs at least one value");
@@ -181,7 +181,7 @@ Result Min(const Call& C)
 }
 Result Max(const Call& C)
 {
-	const std::vector<double> A = Flatten(C);
+	const std::vector<Real> A = Flatten(C);
 	if (A.empty())
 	{
 		return Result::Fail("needs at least one value");
@@ -190,13 +190,13 @@ Result Max(const Call& C)
 }
 Result Sum(const Call& C)
 {
-	const std::vector<double>& A = C.M(0).V;
-	return Result::Of(std::accumulate(A.begin(), A.end(), 0.0));
+	const std::vector<Real>& A = C.M(0).V;
+	return Result::Of(std::accumulate(A.begin(), A.end(), Real(0)));
 }
 Result Prod(const Call& C)
 {
-	double P = 1.0;
-	for (double X : C.M(0).V)
+	Real P = 1.0;
+	for (Real X : C.M(0).V)
 	{
 		P *= X;
 	}
@@ -204,32 +204,32 @@ Result Prod(const Call& C)
 }
 Result Mean(const Call& C)
 {
-	const std::vector<double>& A = C.M(0).V;
+	const std::vector<Real>& A = C.M(0).V;
 	if (A.empty())
 	{
 		return Result::Fail("mean of nothing");
 	}
-	return Result::Of(std::accumulate(A.begin(), A.end(), 0.0) / static_cast<double>(A.size()));
+	return Result::Of(std::accumulate(A.begin(), A.end(), Real(0)) / Real(static_cast<long long>(A.size())));
 }
-double Variance(const std::vector<double>& A)
+Real Variance(const std::vector<Real>& A)
 {
 	if (A.size() < 2)
 	{
 		return 0.0;
 	}
-	const double M = std::accumulate(A.begin(), A.end(), 0.0) / static_cast<double>(A.size());
-	double S = 0.0;
-	for (double X : A)
+	const Real M = std::accumulate(A.begin(), A.end(), Real(0)) / Real(static_cast<long long>(A.size()));
+	Real S = 0.0;
+	for (Real X : A)
 	{
 		S += (X - M) * (X - M);
 	}
-	return S / static_cast<double>(A.size() - 1);
+	return S / static_cast<Real>(A.size() - 1);
 }
 Result Var(const Call& C) { return Result::Of(Variance(C.M(0).V)); }
-Result Std(const Call& C) { return Result::Of(std::sqrt(Variance(C.M(0).V))); }
+Result Std(const Call& C) { return Result::Of(gm::sqrt(Variance(C.M(0).V))); }
 Result Median(const Call& C)
 {
-	std::vector<double> A = C.M(0).V;
+	std::vector<Real> A = C.M(0).V;
 	if (A.empty())
 	{
 		return Result::Fail("median of nothing");
@@ -247,27 +247,27 @@ Result Sort(const Call& C)
 Result Cumsum(const Call& C)
 {
 	Matrix M = C.M(0);
-	double S = 0.0;
-	for (double& X : M.V)
+	Real S = 0.0;
+	for (Real& X : M.V)
 	{
 		S += X;
 		X = S;
 	}
 	return Result::Of(M);
 }
-Result Numel(const Call& C) { return Result::Of(static_cast<double>(C.M(0).Count())); }
-Result Size(const Call& C) { return Result::Record({{"rows", static_cast<double>(C.M(0).Rows)}, {"cols", static_cast<double>(C.M(0).Cols)}}); }
+Result Numel(const Call& C) { return Result::Of(static_cast<Real>(C.M(0).Count())); }
+Result Size(const Call& C) { return Result::Record({{"rows", static_cast<Real>(C.M(0).Rows)}, {"cols", static_cast<Real>(C.M(0).Cols)}}); }
 
-bool Dim(double X, int* Out)
+bool Dim(Real X, int* Out)
 {
-	if (!(X >= 0 && X <= 4096 && X == std::floor(X)))
+	if (!(X >= 0 && X <= 4096 && X == gm::floor(X)))
 	{
 		return false;
 	}
-	*Out = static_cast<int>(X);
+	*Out = X.ToInt();
 	return true;
 }
-Result Fill(const Call& C, double V)
+Result Fill(const Call& C, Real V)
 {
 	int R = 0, Cols = 0;
 	if (!Dim(C.N(0), &R) || !Dim(C.N(1) < 0 ? C.N(0) : C.N(1), &Cols))
@@ -336,7 +336,7 @@ Result Reshape(const Call& C)
 Result Trace(const Call& C) { return Result::Of(la::Trace(C.M(0))); }
 Result Det(const Call& C)
 {
-	double D = 0.0;
+	Real D = 0.0;
 	std::string E;
 	if (!la::Determinant(C.M(0), &D, &E))
 	{
@@ -365,27 +365,27 @@ Result Pinv(const Call& C)
 	return Result::Of(X);
 }
 Result Trans(const Call& C) { return Result::Of(la::Transpose(C.M(0))); }
-Result Rank(const Call& C) { return Result::Of(static_cast<double>(la::Rank(C.M(0)))); }
+Result Rank(const Call& C) { return Result::Of(static_cast<Real>(la::Rank(C.M(0)))); }
 Result Norm(const Call& C)
 {
 	const Matrix& A = C.M(0);
-	const double P = C.N(1);
+	const Real P = C.N(1);
 	if (A.IsVector() || A.IsScalar())
 	{
-		if (std::isinf(P))
+		if (gm::isinf(P))
 		{
 			return Result::Of(la::MaxAbs(A));
 		}
-		double S = 0.0;
-		for (double X : A.V)
+		Real S = 0.0;
+		for (Real X : A.V)
 		{
-			S += std::pow(std::fabs(X), P);
+			S += gm::pow(gm::fabs(X), P);
 		}
-		return Result::Of(std::pow(S, 1.0 / P));
+		return Result::Of(gm::pow(S, 1.0 / P));
 	}
 	if (P == 2.0)
 	{
-		std::vector<double> S;
+		std::vector<Real> S;
 		std::string E;
 		if (!la::Svd(A, nullptr, &S, nullptr, &E))
 		{
@@ -393,16 +393,16 @@ Result Norm(const Call& C)
 		}
 		return Result::Of(S.empty() ? 0.0 : S[0]);
 	}
-	if (P == 1.0 || std::isinf(P))
+	if (P == 1.0 || gm::isinf(P))
 	{
 		const Matrix B = P == 1.0 ? A : la::Transpose(A);
-		double Best = 0.0;
+		Real Best = 0.0;
 		for (int j = 0; j < B.Cols; ++j)
 		{
-			double S = 0.0;
+			Real S = 0.0;
 			for (int i = 0; i < B.Rows; ++i)
 			{
-				S += std::fabs(B(i, j));
+				S += gm::fabs(B(i, j));
 			}
 			Best = std::max(Best, S);
 		}
@@ -416,13 +416,13 @@ Result Norm(const Call& C)
 }
 Result Cond(const Call& C)
 {
-	std::vector<double> S;
+	std::vector<Real> S;
 	std::string E;
 	if (!la::Svd(C.M(0), nullptr, &S, nullptr, &E))
 	{
 		return Result::Fail(E);
 	}
-	return Result::Of(S.back() > 0 ? S.front() / S.back() : std::numeric_limits<double>::infinity());
+	return Result::Of(S.back() > 0 ? S.front() / S.back() : Real::Infinity());
 }
 Result Dot(const Call& C)
 {
@@ -431,7 +431,7 @@ Result Dot(const Call& C)
 	{
 		return Result::Fail("vectors must have the same length");
 	}
-	double S = 0.0;
+	Real S = 0.0;
 	for (size_t i = 0; i < A.V.size(); ++i)
 	{
 		S += A.V[i] * B.V[i];
@@ -445,7 +445,7 @@ Result Cross(const Call& C)
 	{
 		return Result::Fail("cross needs two 3-vectors");
 	}
-	const std::vector<double>&a = A.V, &b = B.V;
+	const std::vector<Real>&a = A.V, &b = B.V;
 	Matrix R = A;
 	R.V = {a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]};
 	return Result::Of(R);
@@ -488,12 +488,12 @@ bool IsSymmetric(const Matrix& A)
 	{
 		return false;
 	}
-	const double Tol = 1e-12 * std::max(1.0, la::MaxAbs(A));
+	const Real Tol = 1e-12 * gm::max(Real(1), la::MaxAbs(A));
 	for (int i = 0; i < A.Rows; ++i)
 	{
 		for (int j = i + 1; j < A.Cols; ++j)
 		{
-			if (std::fabs(A(i, j) - A(j, i)) > Tol)
+			if (gm::fabs(A(i, j) - A(j, i)) > Tol)
 			{
 				return false;
 			}
@@ -507,24 +507,24 @@ Result Eig(const Call& C)
 	std::string E;
 	if (IsSymmetric(A))
 	{
-		std::vector<double> W;
+		std::vector<Real> W;
 		if (!la::SymmetricEigen(A, &W, nullptr, &E))
 		{
 			return Result::Fail(E);
 		}
 		return Result::Of(Matrix::Column(W));
 	}
-	std::vector<double> Re, Im;
+	std::vector<Real> Re, Im;
 	if (!la::Eigenvalues(A, &Re, &Im, &E))
 	{
 		return Result::Fail(E);
 	}
-	bool Real = true;
-	for (double X : Im)
+	bool bAllReal = true;
+	for (Real X : Im)
 	{
-		Real = Real && X == 0.0;
+		bAllReal = bAllReal && X == Real(0);
 	}
-	if (Real)
+	if (bAllReal)
 	{
 		return Result::Of(Matrix::Column(Re));
 	}
@@ -538,7 +538,7 @@ Result Eig(const Call& C)
 }
 Result Eigvec(const Call& C)
 {
-	std::vector<double> W;
+	std::vector<Real> W;
 	Matrix V;
 	std::string E;
 	if (!IsSymmetric(C.M(0)))
@@ -553,7 +553,7 @@ Result Eigvec(const Call& C)
 }
 Result SvdFn(const Call& C)
 {
-	std::vector<double> S;
+	std::vector<Real> S;
 	std::string E;
 	if (!la::Svd(C.M(0), nullptr, &S, nullptr, &E))
 	{
@@ -583,12 +583,12 @@ Result Rho(const Call& C)
 // Polynomials, highest power first (MATLAB convention).
 Result Polyval(const Call& C)
 {
-	const std::vector<double>& P = C.M(0).V;
+	const std::vector<Real>& P = C.M(0).V;
 	Matrix X = C.M(1);
-	for (double& V : X.V)
+	for (Real& V : X.V)
 	{
-		double S = 0.0;
-		for (double Coef : P)
+		Real S = 0.0;
+		for (Real Coef : P)
 		{
 			S = S * V + Coef;
 		}
@@ -598,7 +598,7 @@ Result Polyval(const Call& C)
 }
 Result Roots(const Call& C)
 {
-	std::vector<double> P = C.M(0).V;
+	std::vector<Real> P = C.M(0).V;
 	while (!P.empty() && P.front() == 0.0)
 	{
 		P.erase(P.begin());
@@ -610,7 +610,7 @@ Result Roots(const Call& C)
 		++Zeros;
 	}
 	const int N = static_cast<int>(P.size()) - 1;
-	std::vector<double> Re(static_cast<size_t>(Zeros), 0.0), Im(static_cast<size_t>(Zeros), 0.0);
+	std::vector<Real> Re(static_cast<size_t>(Zeros), 0.0), Im(static_cast<size_t>(Zeros), 0.0);
 	if (N >= 1)
 	{
 		Matrix Comp(N, N);
@@ -622,7 +622,7 @@ Result Roots(const Call& C)
 		{
 			Comp(i, i - 1) = 1.0;
 		}
-		std::vector<double> R2, I2;
+		std::vector<Real> R2, I2;
 		std::string E;
 		if (!la::Eigenvalues(Comp, &R2, &I2, &E))
 		{
@@ -631,12 +631,12 @@ Result Roots(const Call& C)
 		Re.insert(Re.end(), R2.begin(), R2.end());
 		Im.insert(Im.end(), I2.begin(), I2.end());
 	}
-	bool Real = true;
-	for (double X : Im)
+	bool bAllReal = true;
+	for (Real X : Im)
 	{
-		Real = Real && X == 0.0;
+		bAllReal = bAllReal && X == Real(0);
 	}
-	if (Real)
+	if (bAllReal)
 	{
 		return Result::Of(Matrix::Column(Re));
 	}
@@ -650,12 +650,12 @@ Result Roots(const Call& C)
 }
 Result Conv(const Call& C)
 {
-	const std::vector<double> &A = C.M(0).V, &B = C.M(1).V;
+	const std::vector<Real> &A = C.M(0).V, &B = C.M(1).V;
 	if (A.empty() || B.empty())
 	{
 		return Result::Of(Matrix());
 	}
-	std::vector<double> Out(A.size() + B.size() - 1, 0.0);
+	std::vector<Real> Out(A.size() + B.size() - 1, 0.0);
 	for (size_t i = 0; i < A.size(); ++i)
 	{
 		for (size_t j = 0; j < B.size(); ++j)
@@ -668,9 +668,9 @@ Result Conv(const Call& C)
 Result Normpdf(const Call& C)
 {
 	Matrix X = C.M(0);
-	for (double& V : X.V)
+	for (Real& V : X.V)
 	{
-		V = std::exp(-0.5 * V * V) / std::sqrt(2.0 * cst::Pi);
+		V = gm::exp(-0.5 * V * V) / gm::sqrt(2.0 * cst::Pi());
 	}
 	return Result::Of(X);
 }
@@ -752,7 +752,7 @@ void RegisterCoreMath(Registry& R)
 	Def(R, "hypot", "math", Src, "sqrt(x^2 + y^2) without overflow", "", {Num("x", ""), Num("y", "")}, &Hypot);
 	Def(R, "mod", "math", Src, "floored remainder, sign of b", "", {Num("a", ""), Num("b", "")}, &Mod);
 	Def(R, "rem", "math", Src, "truncated remainder, sign of a", "", {Num("a", ""), Num("b", "")}, &Rem);
-	Def(R, "log", "math", Src, "logarithm of x to base b", "", {Num("x", ""), Num("b", "", 2.71828182845904523536)}, &Log);
+	Def(R, "log", "math", Src, "logarithm of x to base b (b = 0 or omitted: natural log)", "", {Num("x", ""), Num("b", "", 0)}, &Log);
 	Def(R, "root", "math", Src, "real n-th root (odd roots of negatives allowed)", "", {Num("x", ""), Num("n", "")}, &Root);
 	Def(R, "nCr", "math", Src, "binomial coefficient", "", {Num("n", ""), Num("k", "")}, &NChooseK);
 	Def(R, "nPr", "math", Src, "permutations of k from n", "", {Num("n", ""), Num("k", "")}, &NPermK);

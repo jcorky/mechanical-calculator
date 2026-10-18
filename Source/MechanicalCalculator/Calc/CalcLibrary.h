@@ -18,12 +18,12 @@ struct Value
 	std::vector<std::string> Fields;   // empty, or one name per element (row-major)
 
 	Value() = default;
-	explicit Value(double X) : M(Matrix::Scalar(X)) {}
+	explicit Value(Real X) : M(Matrix::Scalar(X)) {}
 	explicit Value(Matrix InM) : M(std::move(InM)) {}
 
 	bool IsScalar() const { return M.IsScalar(); }
 	bool IsRecord() const { return !Fields.empty(); }
-	double Scalar() const { return M.ScalarValue(); }
+	Real Scalar() const { return M.ScalarValue(); }
 	int FieldIndex(const std::string& Name) const;
 };
 
@@ -33,12 +33,12 @@ struct Result
 	Value Val;
 	std::string Error;
 
-	static Result Of(double X) { Result R; R.Val = Value(X); return R; }
+	static Result Of(Real X) { Result R; R.Val = Value(X); return R; }
 	static Result Of(const Matrix& M) { Result R; R.Val = Value(M); return R; }
 	static Result Of(const Value& V) { Result R; R.Val = V; return R; }
 	static Result Fail(const std::string& Message) { Result R; R.Ok = false; R.Error = Message; return R; }
 	// Named outputs, in order: Result::Record({{"dv1", a}, {"dv2", b}}).
-	static Result Record(const std::vector<std::pair<std::string, double>>& Items);
+	static Result Record(const std::vector<std::pair<std::string, Real>>& Items);
 };
 
 enum class ParamKind
@@ -53,7 +53,7 @@ struct Param
 	std::string Unit;        // "m", "m/s", "rad", "-" ...; shown in help
 	ParamKind Kind = ParamKind::Number;
 	bool HasDefault = false;
-	double Default = 0.0;
+	Real Default = 0.0;
 };
 
 // Arguments as the function sees them: every declared parameter is present (defaults filled in).
@@ -62,7 +62,7 @@ class Call
 public:
 	explicit Call(const std::vector<Value>& InArgs) : Args(InArgs) {}
 	size_t Count() const { return Args.size(); }
-	double N(size_t I) const { return I < Args.size() ? Args[I].Scalar() : 0.0; }
+	Real N(size_t I) const { return I < Args.size() ? Args[I].Scalar() : 0.0; }
 	int Int(size_t I) const;
 	const Matrix& M(size_t I) const { return Args[I].M; }
 	const Value& V(size_t I) const { return Args[I]; }
@@ -118,25 +118,26 @@ private:
 
 // Declaration helpers for library files.
 inline Param Num(const char* Name, const char* Unit) { Param P; P.Name = Name; P.Unit = Unit; return P; }
-inline Param Num(const char* Name, const char* Unit, double Default) { Param P; P.Name = Name; P.Unit = Unit; P.HasDefault = true; P.Default = Default; return P; }
+inline Param Num(const char* Name, const char* Unit, Real Default) { Param P; P.Name = Name; P.Unit = Unit; P.HasDefault = true; P.Default = Default; return P; }
 inline Param Mat(const char* Name, const char* Unit) { Param P; P.Name = Name; P.Unit = Unit; P.Kind = ParamKind::Matrix; return P; }
 
 void Def(Registry& R, const char* Name, const char* Category, const char* Source, const char* Summary, const char* Returns, std::vector<Param> Params, NativeFn Fn);
 
-// Shared numeric constants (exact CODATA / IAU / ISA values, matching Where It Isn't's modules).
+// Shared constants, as the operator enters them: exact decimal values (CODATA / IAU / ISA,
+// matching Where It Isn't's modules), and pi from the gears.
 namespace cst
 {
-constexpr double Pi = 3.14159265358979323846;
-constexpr double Tau = 6.28318530717958647692;
-constexpr double G0 = 9.80665;              // standard gravity, m/s^2
-constexpr double C = 299792458.0;           // speed of light, m/s
-constexpr double Boltzmann = 1.380649e-23;  // J/K
-constexpr double T0Noise = 290.0;           // reference noise temperature, K
-constexpr double MuEarth = 3.986004418e14;  // m^3/s^2
-constexpr double REarth = 6378.137e3;       // equatorial radius, m
-constexpr double GammaAir = 1.4;
-constexpr double CpAir = 1005.0;            // J/(kg K)
-constexpr double RAir = 287.05;             // J/(kg K)
+inline const Real& Pi() { return gm::Pi(); }
+inline Real Tau() { return Real(2) * gm::Pi(); }
+inline Real G0() { return Real(9.80665); }              // standard gravity, m/s^2
+inline Real C() { return Real(299792458); }             // speed of light, m/s
+inline Real Boltzmann() { return Real(1.380649e-23); }  // J/K
+inline Real T0Noise() { return Real(290); }             // reference noise temperature, K
+inline Real MuEarth() { return Real(3.986004418e14); }  // m^3/s^2
+inline Real REarth() { return Real(6378.137e3); }       // equatorial radius, m
+inline Real GammaAir() { return Real(1.4); }
+inline Real CpAir() { return Real(1005); }              // J/(kg K)
+inline Real RAir() { return Real(287.05); }             // J/(kg K)
 } // namespace cst
 
 // One registration function per library file; Registry::Default() calls them all.

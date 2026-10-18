@@ -43,11 +43,11 @@ public:
 
 	// Formats a value for a display `Width` characters wide (0 = unlimited) as one or more lines.
 	std::vector<std::string> Format(const Value& V, int Width = 0) const;
-	std::string FormatNumber(double X) const;
+	std::string FormatNumber(Real X) const;
 
 	void SetAngleMode(AngleMode Mode) { Angles = Mode; }
 	AngleMode GetAngleMode() const { return Angles; }
-	void SetDigits(int D) { Digits = D < 3 ? 3 : (D > 17 ? 17 : D); }
+	void SetDigits(int D) { Digits = D < 3 ? 3 : (D > Real::Digits ? Real::Digits : D); }
 	int GetDigits() const { return Digits; }
 
 	bool GetVariable(const std::string& Name, Value* Out) const;
@@ -59,8 +59,8 @@ public:
 	std::vector<std::string> Complete(const std::string& Prefix) const;
 
 	// Used by the evaluator.
-	double ToRadians(double X) const;
-	double FromRadians(double X) const;
+	Real ToRadians(Real X) const;
+	Real FromRadians(Real X) const;
 
 private:
 	const Registry* Reg;
