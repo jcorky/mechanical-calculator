@@ -15,7 +15,7 @@ double RadarEval(mcalc::Session& S, const std::string& Line)
 		std::printf("    '%s' -> %s\n", Line.c_str(), O.Text.c_str());
 		return std::nan("");
 	}
-	return O.Val.Scalar();
+	return O.Val.Scalar().ToDouble();
 }
 } // namespace
 

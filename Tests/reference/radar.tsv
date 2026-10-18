@@ -159,7 +159,7 @@ ascan(32, 0.5, rad(40)).limit	0.6087214160269996	rel:1e-12	1/(1 + |sin theta0|)
 ascan(32, 0.5, rad(40)).phase	2.019376832409775	rel:1e-12	basics bench phase step 360 d sin theta0
 ascan(0, 0.5, 0)	error	abs:0	needs at least one element
 r_horizon(20, 3000)	244214.18125894474	rel:1e-12	RadarBasics.horizonExact 244.2 km
-r_horizon(10)	13034.317524447722	rel:1e-12	RadarBasics.horizonExact
+r_horizon(10)	13034.317524447722	rel:1e-10	RadarBasics.horizonExact; 18-digit decimal vs IEEE double: (Ae+h)^2 - Ae^2 cancels ~4e5, double off 1.5e-11 from the 50-digit value, gears 1e-13
 r_horizon(-1, 3)	error	abs:0	height below the ground
 r_horizon_rule(20, 3000)	244193.53373179666	rel:1e-12	RadarBasics.horizonRule 4.12 rule
 r_horizon_rule(100, 9000)	432246.2817904608	rel:1e-12	RadarBasics.horizonRule

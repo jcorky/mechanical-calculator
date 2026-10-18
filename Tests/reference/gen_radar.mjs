@@ -216,7 +216,7 @@ add("ascan(32, 0.5, rad(40)).limit", B.arrayScan(32, 0.5, 40).limit, "rel:1e-12"
 add("ascan(32, 0.5, rad(40)).phase", rad(360 * 0.5 * Math.sin(rad(40))), "rel:1e-12", "basics bench phase step 360 d sin theta0");
 err("ascan(0, 0.5, 0)", "needs at least one element");
 add("r_horizon(20, 3000)", B.horizonExact(20, 3000), "rel:1e-12", "RadarBasics.horizonExact 244.2 km");
-add("r_horizon(10)", B.horizonExact(10, 0), "rel:1e-12", "RadarBasics.horizonExact");
+add("r_horizon(10)", B.horizonExact(10, 0), "rel:1e-10", "RadarBasics.horizonExact; 18-digit decimal vs IEEE double: (Ae+h)^2 - Ae^2 cancels ~4e5, double off 1.5e-11 from the 50-digit value, gears 1e-13");
 err("r_horizon(-1, 3)", "height below the ground");
 add("r_horizon_rule(20, 3000)", B.horizonRule(20, 3000), "rel:1e-12", "RadarBasics.horizonRule 4.12 rule");
 add("r_horizon_rule(100, 9000)", B.horizonRule(100, 9000), "rel:1e-12", "RadarBasics.horizonRule");
