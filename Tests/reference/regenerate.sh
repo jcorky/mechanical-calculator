@@ -12,8 +12,9 @@ for gen in "$HERE"/gen_*.mjs; do
 done
 for gen in "$HERE"/gen_*.py; do
   name="$(basename "$gen" .py)"; name="${name#gen_}"
-  # gen_ops.py is the Chapter 9 half of ops.tsv; gen_ops.mjs runs it itself.
-  [ "$name" = ops ] && continue
+  # A .py next to a .mjs of the same name is that generator's helper (gen_ops.mjs runs gen_ops.py
+  # and appends its cases, and likewise for control); the .mjs already wrote the file.
+  [ -e "$HERE/gen_$name.mjs" ] && continue
   python3 "$gen" "$WII" > "$HERE/$name.tsv"
   echo "$name.tsv  $(grep -vc '^#' "$HERE/$name.tsv") cases"
 done
