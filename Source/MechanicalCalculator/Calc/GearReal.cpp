@@ -414,6 +414,34 @@ Real Real::Parse(const char* Text, size_t* Consumed)
 		Negative = *P == '-';
 		++P;
 	}
+	// "inf", "infinity" and "nan" (any case), as printed for expected values.
+	auto Word = [P](const char* W) {
+		size_t i = 0;
+		for (; W[i] != '\0'; ++i)
+		{
+			if (std::tolower(static_cast<unsigned char>(P[i])) != W[i])
+			{
+				return static_cast<size_t>(0);
+			}
+		}
+		return i;
+	};
+	if (const size_t Len = Word("infinity") ? Word("infinity") : Word("inf"))
+	{
+		if (Consumed)
+		{
+			*Consumed = static_cast<size_t>(P - Text) + Len;
+		}
+		return Infinity(Negative);
+	}
+	if (const size_t Len = Word("nan"))
+	{
+		if (Consumed)
+		{
+			*Consumed = static_cast<size_t>(P - Text) + Len;
+		}
+		return NaN();
+	}
 	D3 N;
 	int Sig = 0;
 	long long Scale = 0;      // power of ten of N's last digit

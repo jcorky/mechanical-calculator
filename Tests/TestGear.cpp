@@ -147,6 +147,8 @@ TEST(gear_number_entry_and_reading)
 	CHECK(Real::Parse("1.2345678901234567891", &Used).ToString() == "1.23456789012345679");   // 18 digits, half up
 	CHECK(Real::Parse("2.5e-7", &Used).ToString(10) == "2.5e-7");
 	CHECK(Real(-3).ToString() == "-3");
+	CHECK(Real::Parse("inf", &Used).IsInf() && Used == 3 && Real::Parse("-Infinity", &Used).IsNegative() && Used == 9);
+	CHECK(Real::Parse("nan", &Used).IsNaN() && Used == 3);
 	CHECK((Real(1) / Real(3) * Real(3)).ToString() == "0.999999999999999999");   // eighteen 3s times 3, exactly
 	CHECK((Real(1) / Real(0)).IsInf());
 	CHECK((Real(0) / Real(0)).IsNaN());
