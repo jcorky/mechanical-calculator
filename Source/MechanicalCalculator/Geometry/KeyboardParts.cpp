@@ -1490,7 +1490,7 @@ BoardParts BuildBoard(const mkb::Layout& Layout, const CaseParams& P)
 			}
 			return Out;
 		};
-		auto Face = [BackFrom, BackTo](const std::vector<Vec3>& Lo, const std::vector<Vec3>& Hi) {
+		auto Face = [=](const std::vector<Vec3>& Lo, const std::vector<Vec3>& Hi) {
 			std::vector<Vec3> Poly;
 			for (int i = BackFrom; i <= BackTo; ++i)
 			{

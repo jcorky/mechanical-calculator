@@ -44,7 +44,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install "numpy>=2,<3"
+      - name: Keep the committed cases
+        run: cp -r Tests/reference "$RUNNER_TEMP/committed"
       - name: Regenerate the reference cases from Where It Isn't
         run: Tests/reference/regenerate.sh "$GITHUB_WORKSPACE/where-it-isnt"
-      - name: The committed cases must match
-        run: git diff --exit-code -- Tests/reference
+      - name: The regenerated cases must match the committed ones
+        run: python3 Tests/reference/compare.py "$RUNNER_TEMP/committed" Tests/reference
