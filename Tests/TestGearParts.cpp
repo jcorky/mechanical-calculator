@@ -160,6 +160,44 @@ struct Box3
 	bool Overlaps(const Box3& O) const { return Lo.X < O.Hi.X && O.Lo.X < Hi.X && Lo.Y < O.Hi.Y && O.Lo.Y < Hi.Y && Lo.Z < O.Hi.Z && O.Lo.Z < Hi.Z; }
 };
 
+// The bounding box of each connected shell of M placed at P.
+std::vector<Box3> ShellBoxes(const Mesh& M, const Pose& P)
+{
+	std::map<std::tuple<long long, long long, long long>, int> Ids;
+	std::vector<int> Weld(M.Positions.size());
+	for (size_t i = 0; i < M.Positions.size(); ++i)
+	{
+		const Vec3& Q = M.Positions[i];
+		Weld[i] = Ids.emplace(std::make_tuple(std::llround(Q.X * 1e5), std::llround(Q.Y * 1e5), std::llround(Q.Z * 1e5)), static_cast<int>(Ids.size())).first->second;
+	}
+	std::vector<int> Parent(Ids.size());
+	std::iota(Parent.begin(), Parent.end(), 0);
+	auto Find = [&Parent](int X) {
+		while (Parent[static_cast<size_t>(X)] != X)
+		{
+			X = Parent[static_cast<size_t>(X)] = Parent[static_cast<size_t>(Parent[static_cast<size_t>(X)])];
+		}
+		return X;
+	};
+	for (size_t t = 0; t + 2 < M.Triangles.size(); t += 3)
+	{
+		const int A = Weld[static_cast<size_t>(M.Triangles[t])], B = Weld[static_cast<size_t>(M.Triangles[t + 1])], C = Weld[static_cast<size_t>(M.Triangles[t + 2])];
+		Parent[static_cast<size_t>(Find(A))] = Find(B);
+		Parent[static_cast<size_t>(Find(B))] = Find(C);
+	}
+	std::map<int, Box3> Boxes;
+	for (size_t i = 0; i < M.Positions.size(); ++i)
+	{
+		Boxes[Find(Weld[i])].Add(P.Point(M.Positions[i]));
+	}
+	std::vector<Box3> Out;
+	for (const auto& B : Boxes)
+	{
+		Out.push_back(B.second);
+	}
+	return Out;
+}
+
 const Mesh* Section(const mgeo::MechPart& P, mgeo::MechMaterial M)
 {
 	for (const mgeo::MechSection& S : P.Sections)
@@ -589,24 +627,31 @@ TEST(gears_mechanism_clearances)
 	const mgeo::MechanismParts& M = Machine();
 	const mgeo::BoardParts B = mgeo::BuildBoard(mkb::FullSizeAnsi(), mgeo::CaseParams());
 	const double Ct = std::cos(B.RestTiltRad), St = std::sin(B.RestTiltRad);
-	double CaseMaxY = -1e30, CaseMinZ = 1e30;
+	double CaseMaxY = -1e30, CaseMinZ = 1e30, CaseMinX = 1e30, CaseMaxX = -1e30;
 	for (const Mesh* K : {&B.CaseShell, &B.CaseBadge, &B.Feet})
 	{
 		for (const Vec3& P : K->Positions)
 		{
 			CaseMaxY = std::max(CaseMaxY, P.Y * Ct - P.Z * St);
 			CaseMinZ = std::min(CaseMinZ, P.Y * St + P.Z * Ct + B.RestLiftMm);
+			CaseMinX = std::min(CaseMinX, P.X);
+			CaseMaxX = std::max(CaseMaxX, P.X);
 		}
 	}
 	CHECK_NEAR(CaseMinZ, 0.0, 1e-9);
-	// Everything but the plinth (and the overhanging carriage at every shift) is behind the keyboard.
+	// Nothing but the plinth comes near the keyboard: within its width, everything (the carriage at
+	// every shift included) is behind it; the printer stands beside it.
 	double MinY = 1e30;
-	auto Scan = [&MinY](const mgeo::MechPart& P, const Pose& At) {
+	auto Scan = [&MinY, CaseMinX, CaseMaxX](const mgeo::MechPart& P, const Pose& At) {
 		for (const mgeo::MechSection& S : P.Sections)
 		{
 			for (const Vec3& Q : S.Geometry.Positions)
 			{
-				MinY = std::min(MinY, At.Point(Q).Y);
+				const Vec3 W = At.Point(Q);
+				if (W.X > CaseMinX - 2.0 && W.X < CaseMaxX + 2.0)
+				{
+					MinY = std::min(MinY, W.Y);
+				}
 			}
 		}
 	};
@@ -631,31 +676,47 @@ TEST(gears_mechanism_clearances)
 	Pl.Add(*Section(M.Plinth, mgeo::MechMaterial::BlackEnamel), Id);
 	CHECK_NEAR(Pl.Hi.Z, 0.0, 1e-9);
 	CHECK(Pl.Lo.Y < -90.0 && Pl.Hi.Y > M.BoundsMax.Y && Pl.Lo.X < -230.0);
-	// The memory columns are clear of the rest of the machine.
-	Box3 Mem, Rest;
-	Mem.Add(*Section(M.MemoryFrame, mgeo::MechMaterial::CastIron), Id);
+	// The memory columns are clear of the rest of the machine (shell by shell) and of the carriage.
+	Box3 Mem;
+	for (const mgeo::MechSection& S : M.MemoryFrame.Sections)
+	{
+		Mem.Add(S.Geometry, Id);
+	}
 	for (size_t I = 0; I < M.MemoryWheels.Poses.size(); ++I)
 	{
 		Mem.Add(*Section(M.MemoryWheels.Model, mgeo::MechMaterial::Brass), M.MemoryWheels.Poses[I]);
 	}
+	std::vector<Box3> Rest;
+	auto AddRest = [&Rest](const mgeo::MechPart& P, const Pose& At) {
+		for (const mgeo::MechSection& S : P.Sections)
+		{
+			for (const Box3& Bx : ShellBoxes(S.Geometry, At))
+			{
+				Rest.push_back(Bx);
+			}
+		}
+	};
 	for (const mgeo::MechPart* P : {&M.Frame, &M.Printer, &M.PaperStrip, &M.Bell})
 	{
-		for (const mgeo::MechSection& S : P->Sections)
-		{
-			Rest.Add(S.Geometry, Id);
-		}
+		AddRest(*P, Id);
 	}
-	for (const mgeo::PartSet* S : {&M.Flywheel, &M.Crank, &M.CrankHandle, &M.DriveGear, &M.PaperRoll})
+	for (const mgeo::PartSet* S : {&M.Flywheel, &M.Crank, &M.CrankHandle, &M.DriveGear, &M.PaperRoll, &M.Drums, &M.MainShaft, &M.ShiftKnob})
 	{
 		for (size_t I = 0; I < S->Poses.size(); ++I)
 		{
-			for (const mgeo::MechSection& Sec : S->Model.Sections)
-			{
-				Rest.Add(Sec.Geometry, S->Poses[I]);
-			}
+			AddRest(S->Model, S->Poses[I]);
 		}
 	}
-	CHECK(!Mem.Overlaps(Rest));
+	for (int K : {0, M.MaxShift})
+	{
+		AddRest(M.Carriage.Model, CarriageAt(M, K));
+	}
+	int MemClash = 0;
+	for (const Box3& Bx : Rest)
+	{
+		MemClash += Mem.Overlaps(Bx) ? 1 : 0;
+	}
+	CHECK(MemClash == 0);
 	// The carriage's frame clears the fixed frame, transfer gears and printer at every shift.
 	const Mesh* Car = Section(M.Carriage.Model, mgeo::MechMaterial::BlackEnamel);
 	std::vector<Vec3> Fixed;

@@ -553,7 +553,7 @@ Mesh BuildStepDrum(const StepDrumParams& P)
 	using namespace gearparts_detail;
 	Mesh M;
 	const StepDrumLayout L = StepDrumGeometry(P);
-	const double Flange = L.TipRadius + 0.5;
+	const double Flange = L.TipRadius + 0.3;   // neighbouring drums stand one pitch apart
 	// Core with a flange at each end.
 	const std::vector<Pt2> Core = {{0.0, L.BodyStartZ}, {Flange, L.BodyStartZ}, {Flange, L.BodyStartZ + 0.8}, {L.RootRadius, L.BodyStartZ + 0.8}, {L.RootRadius, L.TeethEndZ},
 		{Flange, L.TeethEndZ}, {Flange, L.BodyEndZ}, {0.0, L.BodyEndZ}};
@@ -1232,8 +1232,8 @@ NumeralWheel RegisterWheel(double Radius, int GearTeeth, double GearGap, int Sta
 	P.Radius = Radius;
 	P.Width = kWheelWidth;
 	P.GlyphsAlongAxis = false;
-	P.GlyphHeight = 3.3;
-	P.GlyphWidth = 2.3;
+	P.GlyphHeight = 3.0;
+	P.GlyphWidth = 2.2;
 	P.StrokeMm = 0.42;
 	P.EmbossMm = 0.25;
 	P.BoreRadius = 0.85;
@@ -1310,11 +1310,11 @@ MechLayout Plan(const mkb::Layout& Layout, const CaseParams& Case)
 	L.XCrank = L.XFly + 6.0;
 	L.XR = 7.5;
 	L.XL = -(39.0 * L.Pitch) - 12.6;
-	L.YMem = L.YMain + 84.0;
-	L.PlinthX0 = std::min(L.KbMinX, -L.Hw) - 14.0;
+	L.YMem = L.YAcc + 31.0;
+	L.PlinthX0 = std::min(std::min(L.KbMinX, -L.Hw), L.X0 + L.XL) - 14.0;   // under the carriage at shift 0 too
 	L.PlinthX1 = L.XCrank + 30.0;
 	L.PlinthY0 = L.KbMinY - 18.0;
-	L.PlinthY1 = L.YMem + 22.0;
+	L.PlinthY1 = L.YMain + 64.0;
 	return L;
 }
 
@@ -1370,7 +1370,8 @@ void BuildFrames(MechanismParts& Mx, const MechLayout& L)
 	Mesh& Be = Mx.Frame.Of(MechMaterial::BlackEnamel);
 	const Vec3 Xw(1, 0, 0), Yw(0, 1, 0), Zw(0, 0, 1);
 	// Base plate under the mechanism.
-	SolidFromLoop(Fe, RoundedRect(0.5 * (-L.Hw + L.XOuter + 6.0), 0.5 * (L.YAcc + 10.0 + L.YMain + 52.0), 0.5 * (L.XOuter + 6.0 + L.Hw), 0.5 * (L.YMain + 52.0 - L.YAcc - 10.0), 5.0, 6,
+	const double BaseX0 = L.LeftFrame - 14.0, BaseX1 = L.XOuter + 6.0;
+	SolidFromLoop(Fe, RoundedRect(0.5 * (BaseX0 + BaseX1), 0.5 * (L.YAcc + 10.0 + L.YMain + 52.0), 0.5 * (BaseX1 - BaseX0), 0.5 * (L.YMain + 52.0 - L.YAcc - 10.0), 5.0, 6,
 		Splits()), 0.0, L.ZBase);
 	// The two side frames of the drum bank, with a bracket arm out to the transfer shaft.
 	const double Y0 = L.YAcc + 10.5, Y1 = L.YBack, Top = 84.0;
@@ -1417,9 +1418,9 @@ void BuildFrames(MechanismParts& Mx, const MechLayout& L)
 	for (int J = 0; J < Mx.SettingDigits; ++J)
 	{
 		Slots.push_back(L.ColumnX(J));
-		Mx.SettingWindows.push_back(WindowAt(Vec3(L.ColumnX(J), L.YMain - kSetRadius - 1.6, L.ZSet), 3.4, 4.6));
+		Mx.SettingWindows.push_back(WindowAt(Vec3(L.ColumnX(J), L.YMain - kSetRadius - 1.6, L.ZSet), 3.4, 3.9));
 	}
-	AddWindowBar(Be, L.LeftFrame, L.RightFrame, L.YMain - kSetRadius - 1.6, L.ZSet - 6.8, L.ZSet + 6.8, Slots, L.ZSet, 3.4, 4.6);
+	AddWindowBar(Be, L.LeftFrame, L.RightFrame, L.YMain - kSetRadius - 1.6, L.ZSet - 6.8, L.ZSet + 6.8, Slots, L.ZSet, 3.4, 3.9);
 	// Carriage rails on posts.
 	for (double Y : {L.YAcc - 3.0, L.YAcc + 6.0})
 	{
@@ -1571,21 +1572,23 @@ void BuildCarriage(MechanismParts& Mx, const MechLayout& L)
 		Prism(E, EndPlate, Xa, Xa + 3.0, AxisFrame(Vec3(), Xw, Zw));
 	}
 	AddBox(E, L.XL + 1.0, L.XR - 1.0, Yf, L.YAcc + 8.0, Zb, Zb + 2.0);
-	AddBox(E, L.XL + 1.0, L.XR - 1.0, Yf, L.YCnt + 2.5, ZTop, ZTop + 1.4);
+	// Open on top (the wheels and their gears show): a front rail and a steel tie rod at the back.
+	AddBox(E, L.XL + 1.0, L.XR - 1.0, Yf, Yf + 3.0, ZTop, ZTop + 1.4);
+	AddRod(St, Vec3(L.XL + 0.5, L.YCnt + 1.5, ZTop + 0.7), Vec3(L.XR - 0.5, L.YCnt + 1.5, ZTop + 0.7), 0.8);
 	// Window bars.
 	std::vector<double> AccSlots, CntSlots;
 	for (int I = 0; I < Mx.AccumulatorDigits; ++I)
 	{
 		AccSlots.push_back(-I * L.Pitch);
-		Mx.AccumulatorWindows.push_back(WindowAt(Vec3(-I * L.Pitch, AccBarY, L.ZAcc), 3.4, 4.6));
+		Mx.AccumulatorWindows.push_back(WindowAt(Vec3(-I * L.Pitch, AccBarY, L.ZAcc), 3.4, 3.9));
 		if (I < Mx.CounterDigits)
 		{
 			CntSlots.push_back(-I * L.Pitch);
-			Mx.CounterWindows.push_back(WindowAt(Vec3(-I * L.Pitch, CntBarY, L.ZCnt), 3.4, 4.4));
+			Mx.CounterWindows.push_back(WindowAt(Vec3(-I * L.Pitch, CntBarY, L.ZCnt), 3.4, 3.8));
 		}
 	}
-	AddWindowBar(E, L.XL + 2.9, L.XR - 2.9, AccBarY, L.ZAcc - 6.8, L.ZAcc + 6.8, AccSlots, L.ZAcc, 3.4, 4.6);
-	AddWindowBar(E, -(Mx.CounterDigits - 1) * L.Pitch - 9.0, L.XR - 2.9, CntBarY, L.ZCnt - 6.6, L.ZCnt + 6.6, CntSlots, L.ZCnt, 3.4, 4.4);
+	AddWindowBar(E, L.XL + 2.9, L.XR - 2.9, AccBarY, L.ZAcc - 6.8, L.ZAcc + 6.8, AccSlots, L.ZAcc, 3.4, 3.9);
+	AddWindowBar(E, -(Mx.CounterDigits - 1) * L.Pitch - 9.0, L.XR - 2.9, CntBarY, L.ZCnt - 6.6, L.ZCnt + 6.6, CntSlots, L.ZCnt, 3.4, 3.8);
 	// The counter row's left hanger, the shafts and the carry levers' pivot rod.
 	const double CntLeft = -(Mx.CounterDigits - 1) * L.Pitch - 9.0;
 	AddBox(E, CntLeft, CntLeft + 2.5, CntBarY + 1.0, L.YCnt + 2.5, L.ZCnt - 1.5, ZTop + 0.1);
@@ -1849,8 +1852,8 @@ void BuildDrive(MechanismParts& Mx, const MechLayout& L)
 void BuildPrinter(MechanismParts& Mx, const MechLayout& L)
 {
 	const Vec3 Xw(1, 0, 0), Yw(0, 1, 0), Zw(0, 0, 1);
-	const double Xa = -L.Hw + 4.0, Xb = L.LeftFrame - 7.0, Xc = 0.5 * (Xa + Xb);
-	const double YTw = L.YAcc + 22.0, ZPr = 44.0, RTw = 7.5;
+	const double Xc = 0.5 * (L.PlinthX0 + std::min(L.KbMinX, -L.Hw)), Yp = L.PlinthY0 + 12.0;
+	const double YTw = Yp + 9.0, ZPr = 44.0, RTw = 7.5;
 	const double YPl = YTw + RTw + 0.5 + 8.0, RPl = 8.0;
 	const double YRoll = YPl + 30.0, ZRoll = 38.0, RRoll = 17.0;
 	const double YRib = YTw + RTw + 0.25;
@@ -1858,8 +1861,8 @@ void BuildPrinter(MechanismParts& Mx, const MechLayout& L)
 	Mesh& E = Mx.Printer.Of(MechMaterial::BlackEnamel);
 	Mesh& St = Mx.Printer.Of(MechMaterial::Steel);
 	// Frame plates with bosses for the platen, the roll and the type-wheel shaft.
-	const std::vector<Pt2> Side = {{L.YAcc + 13.0, 0.0}, {YRoll + 20.0, 0.0}, {YRoll + 20.0, 8.0}, {YRoll + 14.0, 14.0}, {YRoll + 10.0, ZRoll + 14.0}, {YPl + 6.0, ZPr + 12.0},
-		{YTw - 4.0, ZPr + 12.0}, {L.YAcc + 13.0, ZPr + 2.0}};
+	const std::vector<Pt2> Side = {{Yp, 0.0}, {YRoll + 20.0, 0.0}, {YRoll + 20.0, 8.0}, {YRoll + 14.0, 14.0}, {YRoll + 10.0, ZRoll + 14.0}, {YPl + 6.0, ZPr + 12.0},
+		{YTw - 4.0, ZPr + 12.0}, {Yp, ZPr + 2.0}};
 	for (double S = -1.0; S <= 1.0; S += 2.0)
 	{
 		const double X = Xc + S * 34.0;
@@ -1870,7 +1873,7 @@ void BuildPrinter(MechanismParts& Mx, const MechLayout& L)
 		}
 	}
 	AddRod(St, Vec3(Xc - 35.0, YTw, ZPr), Vec3(Xc + 35.0, YTw, ZPr), 1.0);
-	AddRod(St, Vec3(Xc - 35.0, L.YAcc + 14.0, 8.0), Vec3(Xc + 35.0, L.YAcc + 14.0, 8.0), 1.6);
+	AddRod(St, Vec3(Xc - 35.0, Yp + 1.0, 8.0), Vec3(Xc + 35.0, Yp + 1.0, 8.0), 1.6);
 	AddRod(St, Vec3(Xc - 35.0, YRoll + 18.0, 8.0), Vec3(Xc + 35.0, YRoll + 18.0, 8.0), 1.6);
 	// Ribbon between the spools, passing between the type wheels and the paper.
 	const double Sl = Xc - 39.0, Sr = Xc + 39.0;
@@ -1885,7 +1888,12 @@ void BuildPrinter(MechanismParts& Mx, const MechLayout& L)
 			Teeth.push_back(Pt2{X + 1.0, 1.8});
 		}
 		Teeth.push_back(Pt2{Xc - 32.0, 1.2});
-		Prism(St, Teeth, YPl - RPl + 0.3, YPl - RPl + 1.3, AxisFrame(Vec3(0, 0, ZPr + RPl + 4.0), Yw, Zw));
+		Frame3 Tf;
+		Tf.O = Vec3(0, 0, ZPr + RPl + 4.0);
+		Tf.U = Xw;
+		Tf.V = Zw;
+		Tf.W = Yw;
+		Prism(St, Teeth, YPl - RPl + 0.3, YPl - RPl + 1.3, Tf);
 		AddBox(St, Xc - 34.0, Xc + 34.0, YPl - RPl + 0.3, YPl - RPl + 1.3, ZPr + RPl + 1.0, ZPr + RPl + 4.1);
 	}
 	// Type wheels: brass wheels with raised figures, turned to the platen (local +Y -> world +y).
@@ -1934,7 +1942,7 @@ void BuildPrinter(MechanismParts& Mx, const MechLayout& L)
 		for (double X : {Sl, Sr})
 		{
 			Mx.RibbonSpools.Poses.push_back(PoseOf(Vec3(X, YRib - 4.5, ZPr), Zw, Yw));
-			AddRod(St, Vec3(X, YRib - 4.5, L.ZBase - 0.1), Vec3(X, YRib - 4.5, ZPr - 6.7), 1.5);
+			AddRod(St, Vec3(X, YRib - 4.5, -0.1), Vec3(X, YRib - 4.5, ZPr - 6.7), 1.5);
 		}
 	}
 	// The paper: off the roll, round the front of the platen past the print line, up and curling
@@ -1977,6 +1985,8 @@ void BuildPrinter(MechanismParts& Mx, const MechLayout& L)
 	Mx.TapeUsableWidthMm = 50.0;
 }
 
+constexpr int kMemTopTeeth = 24, kMemIdlerTeeth = 18;
+
 void BuildMemory(MechanismParts& Mx, const MechLayout& L)
 {
 	const Vec3 Yw(0, 1, 0), Zw(0, 0, 1);
@@ -1985,18 +1995,20 @@ void BuildMemory(MechanismParts& Mx, const MechLayout& L)
 	Mesh& Br = Mx.MemoryFrame.Of(MechMaterial::Brass);
 	const double R = 8.0, Pitch = 7.2, Base = 12.0, Gap = 5.0;
 	const int N = Mx.MemoryColumns, Per = Mx.MemoryMantissa + Mx.MemoryExponent;
-	const double Span = 0.5 * (L.PlinthX1 - L.PlinthX0) - 40.0;
-	const double Mid = 0.5 * (L.PlinthX0 + L.PlinthX1);
+	const double RailX0 = L.PlinthX0 + 16.0, RailX1 = L.LeftFrame - 18.0;
+	const double Mid = 0.5 * (RailX0 + RailX1), Span = 0.5 * (RailX1 - RailX0) - 18.0 - 15.0;
 	const double TopZ = Base + 4.0 + (Per + 1) * Pitch + Gap + 4.0;
 	NumeralWheelParams P;
 	P.Radius = R;
-	P.Width = 5.6;
+	P.Width = 4.4;
 	P.GlyphsAlongAxis = true;
-	P.GlyphHeight = 4.0;
-	P.GlyphWidth = 2.8;
-	P.StrokeMm = 0.5;
+	P.GlyphHeight = 3.4;
+	P.GlyphWidth = 2.4;
+	P.StrokeMm = 0.45;
 	P.EmbossMm = 0.3;
 	P.BoreRadius = 1.25;
+	P.GearTeeth = 22;            // each figure wheel's own gear, under its rim
+	P.GearModule = 0.6;
 	SetWheelModel(Mx.MemoryWheels.Model, BuildNumeralWheel(P), MechMaterial::Brass, MechMaterial::Engraving);
 	P.SignWheel = true;
 	SetWheelModel(Mx.MemorySignWheels.Model, BuildNumeralWheel(P), MechMaterial::Brass, MechMaterial::Engraving);
@@ -2008,7 +2020,8 @@ void BuildMemory(MechanismParts& Mx, const MechLayout& L)
 		// Base block, axle, two pillars and the label plate.
 		SolidFromLoop(Fe, RoundedRect(X, Y, 13.0, 13.0, 2.0, 4, Splits()), 0.0, Base);
 		SolidFromLoop(Fe, RoundedRect(X, Y, 11.0, 11.0, 2.0, 4, Splits()), Base - 0.1, Base + 2.0);
-		AddRod(St, Vec3(X, Y, Base + 1.9), Vec3(X, Y, TopZ + 0.1), 1.2);
+		AddRod(St, Vec3(X, Y, Base + 1.9), Vec3(X, Y, TopZ + 11.5), 1.2);
+		AddSpur(Br, Vec3(X, Y, TopZ + 9.5), Zw, kMemTopTeeth, 1.0, 2.4, 1.25);
 		for (double S = -1.0; S <= 1.0; S += 2.0)
 		{
 			AddRod(Br, Vec3(X + S * 11.0, Y + 8.0, Base + 1.9), Vec3(X + S * 11.0, Y + 8.0, TopZ + 0.1), 1.4);
@@ -2037,21 +2050,46 @@ void BuildMemory(MechanismParts& Mx, const MechLayout& L)
 		double Z = TopZ - 4.0 - 0.5 * Pitch;
 		const Pose Sign = Place(Z);
 		Mx.MemorySignWheels.Poses.push_back(Sign);
-		Signs.push_back(WindowAt(Sign.Point(Vec3(0, R + 0.3, 0)), 2.8, 4.0));
+		Signs.push_back(WindowAt(Sign.Point(Vec3(0, R + 0.3, 0)), 2.6, 3.6));
 		for (int K = 0; K < Per; ++K)
 		{
 			Z -= Pitch + (K == Mx.MemoryMantissa ? Gap : 0.0);
 			const Pose Wp = Place(Z);
 			Mx.MemoryWheels.Poses.push_back(Wp);
-			Mx.MemoryWindows.push_back(WindowAt(Wp.Point(Vec3(0, R + 0.3, 0)), 2.8, 4.0));
+			Mx.MemoryWindows.push_back(WindowAt(Wp.Point(Vec3(0, R + 0.3, 0)), 2.6, 3.6));
 		}
 		// Brass spacer washers between the mantissa and the exponent.
 		Cylinder(Br, X, Y, 3.0, 16, Z + 0.5 * Pitch + 0.2, Z + 0.5 * Pitch + Gap - 0.2);
 	}
 	Mx.MemoryWindows.insert(Mx.MemoryWindows.end(), Signs.begin(), Signs.end());
 	// The top rail across all the columns, on end posts.
-	const double X0 = Mid - Span - 18.0, X1 = Mid + Span + 18.0;
+	const double X0 = RailX0, X1 = RailX1;
 	AddBox(Fe, X0, X1, L.YMem + 2.0, L.YMem + 14.0, TopZ, TopZ + 7.0);
+	const double Half = Span / (N - 1), Cd = 0.5 * (kMemTopTeeth + kMemIdlerTeeth);
+	if (Half < Cd - 1.0)
+	{
+		const double Dy = std::sqrt(Cd * Cd - Half * Half);
+		for (int C = 0; C + 1 < N; ++C)
+		{
+			const double Xi = Mid - Span + Half * (2 * C + 1);
+			const Vec3 Ci(Xi, L.YMem + Dy, TopZ + 9.5);
+			AddRod(St, Vec3(Xi, Ci.Y, TopZ + 6.9), Vec3(Xi, Ci.Y, TopZ + 11.5), 1.2);
+			AddSpur(Br, Ci, Zw, kMemIdlerTeeth, 1.0, 2.4, 1.25);
+			for (int Side = 0; Side < 2; ++Side)
+			{
+				GearPair G;
+				G.Name = "memory top gears";
+				G.PointA = Vec3(Mid - Span + 2.0 * Half * (C + Side), L.YMem, TopZ + 9.5);
+				G.AxisA = Zw;
+				G.PointB = Ci;
+				G.AxisB = Zw;
+				G.Module = 1.0;
+				G.TeethA = kMemTopTeeth;
+				G.TeethB = kMemIdlerTeeth;
+				Mx.GearPairs.push_back(G);
+			}
+		}
+	}
 	for (double X : {X0 + 4.0, X1 - 4.0})
 	{
 		AddBox(Fe, X - 4.0, X + 4.0, L.YMem + 2.0, L.YMem + 14.0, 0.0, TopZ + 0.1);
@@ -2074,8 +2112,8 @@ MechanismParts BuildMechanism(const mkb::Layout& Layout, const CaseParams& Case)
 	BuildDrive(Mx, L);
 	BuildPrinter(Mx, L);
 	BuildMemory(Mx, L);
-	Mx.BoundsMin = Vec3(-L.Hw, L.YF, 0.0);
-	Mx.BoundsMax = Vec3(L.XCrank + 25.0, L.YMem + 15.0, 200.0);
+	Mx.BoundsMin = Vec3(L.PlinthX0 + 10.0, L.PlinthY0 + 10.0, 0.0);
+	Mx.BoundsMax = Vec3(L.XCrank + 25.0, L.YMain + 52.0, 200.0);
 	return Mx;
 }
 

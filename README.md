@@ -95,7 +95,8 @@ Source/MechanicalCalculator/
   Calc/       the calculator: expression language, linear algebra (LU, QR/SVD, Jacobi, Francis QR,
               Pade expm, DARE by doubling, CARE by the matrix sign function, Lyapunov) and one
               library file per part of Where It Isn't
-  Geometry/   procedural meshes: keycaps, switches, stabilizers, plate, PCB, case, OLED
+  Geometry/   procedural meshes: keycaps, switches, stabilizers, plate, PCB, case (OLED optional),
+              and the gear mechanism: stepped drums, carriage, memory columns, printer, plinth
   Keyboard/   the firmware (input line, history, completion, tape, library browser), switch
               dynamics, synthesized key sounds, RGB backlight, and the 104-key ANSI layout
   Public/, Private/   the Unreal layer: AMechanicalKeyboard, the viewer pawn, the studio set,

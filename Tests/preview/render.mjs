@@ -3,8 +3,11 @@
 //   build/mcalc_export_obj <dir>
 //   node Tests/preview/render.mjs <dir> Docs/images [view ...]
 //
-// Views: hero (3/4 view of the board on a desk), closeup (a few keys and the OLED, one cap pulled),
-// exploded (one switch and its keycap pulled apart), profile (side view of the sculpt).
+// Views: hero (the whole device on its plinth), closeup (a few keys and the name plate, one cap
+// pulled), exploded (one switch and its keycap pulled apart), profile (side view of the sculpt),
+// mechanism (the calculating mechanism, glass cover off), gears_closeup (drums, pinions, transfer
+// gears and the carriage wheels), memory_columns, exploded_mechanism (one column's gear chain).
+// Debug cameras: cam:x,y,z:tx,ty,tz:fov (board alone) and mcam:... (the whole device).
 // three.js is fetched once from jsDelivr into the OS temp directory. Playwright is taken from
 // PLAYWRIGHT_PATH or the global install at /opt/node22/lib/node_modules/playwright.
 import { createRequire } from 'node:module';
@@ -17,7 +20,9 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/opt/node22/lib/node_modules/playwright');
 
 const [inDir = '.', outDir = 'Docs/images', ...wanted] = process.argv.slice(2);
-const views = wanted.length ? wanted : ['hero', 'closeup', 'exploded', 'profile'];
+const views = wanted.length ? wanted : ['hero', 'closeup', 'exploded', 'profile', 'mechanism', 'gears_closeup', 'memory_columns', 'exploded_mechanism'];
+const mechViews = ['hero', 'mechanism', 'gears_closeup', 'memory_columns', 'exploded_mechanism'];
+const isMech = (v) => mechViews.includes(v) || v.startsWith('mcam:');
 
 const THREE_VERSION = '0.160.0';
 const cacheDir = path.join(os.tmpdir(), `mcalc-three-${THREE_VERSION}`);
@@ -128,6 +133,23 @@ async function pageMain(THREE, RoomEnvironment) {
 		stab_stem: phys({ color: 0x2c2c2e, roughness: 0.5 }),
 		stab_wire: phys({ color: 0xc9c9c9, metalness: 1.0, roughness: 0.25 }),
 		oled_bezel: phys({ color: 0x101012, roughness: 0.3, metalness: 0.2 }),
+		nameplate: phys({ color: 0xd9ad55, metalness: 1.0, roughness: 0.24 }),
+	};
+	// The mechanism's materials (MechMaterialName).
+	const mechMaterials = {
+		brass: phys({ color: 0xe8c068, metalness: 1.0, roughness: 0.3, envMapIntensity: 1.7 }),
+		steel: phys({ color: 0xd6dade, metalness: 1.0, roughness: 0.16, envMapIntensity: 1.4 }),
+		cast_iron: phys({ color: 0x1a1b1d, metalness: 0.35, roughness: 0.42, clearcoat: 0.5, clearcoatRoughness: 0.35 }),
+		black_enamel: phys({ color: 0x0b0b0c, roughness: 0.3, clearcoat: 0.9, clearcoatRoughness: 0.12 }),
+		numeral_black: phys({ color: 0x0e0e0f, roughness: 0.4, clearcoat: 0.4 }),
+		paint: phys({ color: 0xf4f1e8, roughness: 0.55 }),
+		engraving: phys({ color: 0x241a10, roughness: 0.6, metalness: 0.2 }),
+		white_enamel: phys({ color: 0xf2f0ea, roughness: 0.28, clearcoat: 0.7 }),
+		glass: phys({ color: 0xffffff, roughness: 0.02, transmission: 0.95, transparent: true, opacity: 0.25 }),
+		paper: phys({ color: 0xf1ecdc, roughness: 0.92, side: THREE.DoubleSide }),
+		rubber: phys({ color: 0x161616, roughness: 0.9 }),
+		ribbon: phys({ color: 0x3b1514, roughness: 0.8 }),
+		wood: phys({ color: 0x5e3119, roughness: 0.38, clearcoat: 0.6, clearcoatRoughness: 0.25 }),
 	};
 
 	function legendTexture(key, ink) {
@@ -280,11 +302,77 @@ async function pageMain(THREE, RoomEnvironment) {
 		return world;
 	}
 
-	function stage(width, height, background, shadowOnly = false) {
+	// --- The mechanism: each unique part once, drawn at its instances' poses (desk frame). ---
+	const poseMatrix = (p) => new THREE.Matrix4().set(p[3], p[6], p[9], p[0], p[4], p[7], p[10], p[1], p[5], p[8], p[11], p[2], 0, 0, 0, 1);
+	function buildMechanism(groups, list) {
+		const byName = Object.fromEntries(groups.map((g) => [g.name, g.geo]));
+		const model = new THREE.Group();
+		for (const part of list) {
+			for (const gname of part.groups) {
+				const geo = byName[gname];
+				if (!geo) continue;
+				const mat = mechMaterials[gname.split(':')[2]] || phys({ color: 0xff00ff });
+				let mesh;
+				if (part.poses.length === 1) {
+					mesh = new THREE.Mesh(geo, mat);
+					mesh.matrixAutoUpdate = false;
+					mesh.matrix.copy(poseMatrix(part.poses[0]));
+				} else {
+					mesh = new THREE.InstancedMesh(geo, mat, part.poses.length);
+					part.poses.forEach((p, i) => mesh.setMatrixAt(i, poseMatrix(p)));
+				}
+				mesh.castShadow = mesh.receiveShadow = true;
+				model.add(mesh);
+			}
+		}
+		return model;
+	}
+
+	// A text plane on a face: centre, normal, up, size in mm.
+	function textPlane(text, { center, normal, up, w, h }, { ink = '#111', font = '600', px = 0.62, family = 'Georgia, serif', align = 'center', spacing = 0 } = {}) {
+		const H = 128, W = Math.max(16, Math.round(H * w / h));
+		const c = document.createElement('canvas');
+		c.width = W; c.height = H;
+		const g = c.getContext('2d');
+		g.fillStyle = ink;
+		g.font = `${font} ${Math.round(px * H)}px ${family}`;
+		g.textAlign = align;
+		g.textBaseline = 'middle';
+		if (spacing) g.letterSpacing = `${spacing}px`;
+		g.fillText(text, align === 'center' ? W / 2 : 0.02 * W, H * 0.54);
+		const t = new THREE.CanvasTexture(c);
+		t.colorSpace = THREE.SRGBColorSpace;
+		t.anisotropy = 8;
+		const m = new THREE.MeshStandardMaterial({ map: t, transparent: true, roughness: 0.6, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
+		const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
+		const n = new THREE.Vector3(...normal), u = new THREE.Vector3(...up), r = new THREE.Vector3().crossVectors(u, n);
+		mesh.matrixAutoUpdate = false;
+		mesh.matrix.makeBasis(r, u, n).setPosition(new THREE.Vector3(...center).addScaledVector(n, 0.08));
+		return mesh;
+	}
+
+	function mechanismDecals(mech) {
+		const g = new THREE.Group();
+		mech.labels.forEach((l, i) => g.add(textPlane(l.text, l, i === 0 ? { ink: '#1b140b', px: 0.5, spacing: 6 } : { ink: '#1b140b', px: 0.62 })));
+		for (const line of mech.tape) {
+			g.add(textPlane(line.text, { center: line.origin, normal: line.normal, up: line.up, w: mech.tapeUsable, h: mech.tapePitch * 0.8 },
+				{ ink: '#3a2a6a', font: '500', px: 0.78, family: '"DejaVu Sans Mono", monospace', align: 'left' }));
+		}
+		return g;
+	}
+
+	// Desk frame (mm, z up; the plinth top at z = 0) to three.js, the plinth standing on the desk.
+	function onPlinth(model, rest, lift) {
+		const w = place(model, rest);
+		w.position.y = lift;
+		return w;
+	}
+
+	function stage(width, height, background, shadowOnly = false, extent = 320) {
 		renderer.setSize(width, height);
 		const s = new THREE.Scene();
 		s.background = new THREE.Color(background);
-		s.fog = new THREE.Fog(background, 900, 2600);
+		s.fog = new THREE.Fog(background, 1400, 4200);
 		s.environment = envMap;
 		const deskMat = shadowOnly ? new THREE.ShadowMaterial({ opacity: 0.35 }) : new THREE.MeshStandardMaterial({ color: 0x55585e, roughness: 0.8 });
 		const desk = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), deskMat);
@@ -292,10 +380,10 @@ async function pageMain(THREE, RoomEnvironment) {
 		desk.receiveShadow = true;
 		s.add(desk);
 		const sun = new THREE.DirectionalLight(0xfff4e6, 2.8);
-		sun.position.set(-260, 520, 240);
+		sun.position.set(-260 * extent / 320, 520 * extent / 320, 240 * extent / 320);
 		sun.castShadow = true;
 		sun.shadow.mapSize.set(4096, 4096);
-		Object.assign(sun.shadow.camera, { left: -320, right: 320, top: 240, bottom: -240, near: 10, far: 1500 });
+		Object.assign(sun.shadow.camera, { left: -extent, right: extent, top: 0.75 * extent, bottom: -0.75 * extent, near: 10, far: 5 * extent });
 		sun.shadow.bias = -0.0004;
 		sun.shadow.normalBias = 0.3;
 		s.add(sun);
@@ -306,9 +394,44 @@ async function pageMain(THREE, RoomEnvironment) {
 	const cache = {};
 	const parts = async (name) => (cache[name] ||= await load(name));
 
+	let mechData = null;
+	const camera = (fov, w, h, p, t) => {
+		const c = new THREE.PerspectiveCamera(fov, w / h, 5, 8000);
+		c.position.set(...p);
+		c.lookAt(...t);
+		return c;
+	};
+
 	window.renderView = async (view) => {
 		let width = 1800, height = 1100, cam, s;
-		if (view === 'exploded') {
+		if (view === 'exploded_mechanism') {
+			mechData ||= await (await fetch('/data/mechanism.json')).json();
+			width = 1500; height = 1100;
+			({ s } = stage(width, height, 0x6a6e75, true, 200));
+			s.add(onPlinth(buildMechanism(await parts('mechanism'), mechData.exploded), false, -10));
+			cam = camera(26, width, height, [300, 140, 40], [140, 62, -100]);
+		} else if (['hero', 'mechanism', 'gears_closeup', 'memory_columns'].includes(view) || view.startsWith('mcam:')) {
+			mechData ||= await (await fetch('/data/mechanism.json')).json();
+			const lift = mechData.plinthH;
+			({ s } = stage(width, height, 0x4d5056, false, 620));
+			s.add(onPlinth(buildModel(await parts('board')), true, lift));
+			s.add(onPlinth(buildMechanism(await parts('mechanism'), mechData.parts), false, lift));
+			s.add(onPlinth(mechanismDecals(mechData), false, lift));
+			if (view === 'hero') {
+				cam = camera(26, width, height, [500, 520, 700], [-70, 55, -55]);
+			} else if (view === 'mechanism') {
+				cam = camera(34, width, height, [360, 330, 170], [10, 55, -110]);
+			} else if (view === 'gears_closeup') {
+				width = 1600; height = 1000;
+				renderer.setSize(width, height);
+				cam = camera(30, width, height, [150, 175, -40], [95, 55, -115]);
+			} else if (view === 'memory_columns') {
+				cam = camera(34, width, height, [-170, 250, 190], [-280, 115, -120]);
+			} else {
+				const [, p, t, fov] = view.split(':');
+				cam = camera(Number(fov) || 30, width, height, p.split(',').map(Number), t.split(',').map(Number));
+			}
+		} else if (view === 'exploded') {
 			width = 1100; height = 1400;
 			({ s } = stage(width, height, 0x6a6e75, true));
 			const model = place(buildModel(await parts('switch_exploded'), { decals: false }), false);
@@ -321,11 +444,7 @@ async function pageMain(THREE, RoomEnvironment) {
 			({ s } = stage(width, height, 0x55585e));
 			const pulled = view === 'closeup' ? { Num8: 15 } : {};
 			s.add(place(buildModel(await parts('board'), { pulled }), true));
-			if (view === 'hero') {
-				cam = new THREE.PerspectiveCamera(22, width / height, 10, 5000);
-				cam.position.set(-360, 440, 640);
-				cam.lookAt(12, 4, -6);
-			} else if (view === 'closeup') {
+			if (view === 'closeup') {
 				width = 1600; height = 1000;
 				renderer.setSize(width, height);
 				cam = new THREE.PerspectiveCamera(30, width / height, 5, 3000);
@@ -358,7 +477,7 @@ async function pageMain(THREE, RoomEnvironment) {
 
 fetchLibs();
 const blobs = {};
-const need = new Set(views.map((v) => (v === 'exploded' ? 'switch_exploded' : 'board')));
+const need = new Set(views.flatMap((v) => (v === 'exploded' ? ['switch_exploded'] : v === 'exploded_mechanism' ? ['mechanism'] : isMech(v) ? ['board', 'mechanism'] : ['board'])));
 for (const name of need) {
 	const t0 = Date.now();
 	blobs[name] = packObj(path.join(inDir, `${name}.obj`));
@@ -383,7 +502,9 @@ await page.route('http://preview.local/**', async (route) => {
 	if (p === '/three.module.js' || p === '/RoomEnvironment.js') {
 		return route.fulfill({ contentType: 'text/javascript', body: fs.readFileSync(path.join(cacheDir, p.slice(1))) });
 	}
-	if (p === '/data/scene.json') return route.fulfill({ contentType: 'application/json', body: fs.readFileSync(path.join(inDir, 'scene.json')) });
+	if (p === '/data/scene.json' || p === '/data/mechanism.json') {
+		return route.fulfill({ contentType: 'application/json', body: fs.readFileSync(path.join(inDir, p.slice(6))) });
+	}
 	const m = p.match(/^\/data\/(.+)\.bin$/);
 	if (m && blobs[m[1]]) return route.fulfill({ contentType: 'application/octet-stream', body: blobs[m[1]] });
 	return route.fulfill({ status: 404, body: '' });
@@ -396,7 +517,7 @@ fs.mkdirSync(outDir, { recursive: true });
 for (const view of views) {
 	const t0 = Date.now();
 	const url = await page.evaluate((v) => window.renderView(v), view);
-	const file = path.join(outDir, `${view.startsWith('cam:') ? 'debug-' + views.indexOf(view) : view}.png`);
+	const file = path.join(outDir, `${/^m?cam:/.test(view) ? 'debug-' + views.indexOf(view) : view}.png`);
 	fs.writeFileSync(file, Buffer.from(url.split(',')[1], 'base64'));
 	console.log(`${file} (${Date.now() - t0} ms)`);
 }
