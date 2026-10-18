@@ -1,5 +1,6 @@
 #include "MechanicalKeyboard.h"
 
+#include "Async/Async.h"
 #include "Components/BoxComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "KeyboardMaterials.h"
@@ -130,6 +131,7 @@ void AMechanicalKeyboard::BeginPlay()
 		Build();
 	}
 	Audio.Initialize();
+	Device.SetAsync(true);
 	Lights.SetMode(Device.BacklightMode());
 	LastBacklightMode = -1;
 	if (bPlayDemo && DemoLines.Num() > 0)
@@ -140,6 +142,75 @@ void AMechanicalKeyboard::BeginPlay()
 		QueueDemo();
 	}
 	RefreshScreen();
+}
+
+void AMechanicalKeyboard::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (Evaluation.IsValid())
+	{
+		Evaluation.Wait();   // the worker holds a pointer to the session
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+void AMechanicalKeyboard::StartEvaluation()
+{
+	mcalc::Session* Session = &Device.GetSession();
+	const std::string Expression = Device.PendingExpression();
+	const size_t Keep = static_cast<size_t>(FMath::Max(100, RecordedEvents));
+	bComputing = true;
+	Evaluation = Async(EAsyncExecution::Thread, [Session, Expression, Keep]() {
+		FGearEvaluation R;
+		mcalc::GearRecorder Recorder(Keep);
+		mcalc::GearContext::Attach(&Recorder);
+		mcalc::GearContext::ResetStats();
+		R.Outcome = Session->Execute(Expression);
+		R.Work = mcalc::GearContext::Stats();
+		mcalc::GearContext::Attach(nullptr);
+		R.Events = Recorder.GetEvents();
+		return R;
+	});
+}
+
+void AMechanicalKeyboard::TickMachine(float DeltaSeconds)
+{
+	if (bComputing && Evaluation.IsValid() && Evaluation.IsReady())
+	{
+		Finished = Evaluation.Get();
+		Evaluation.Reset();
+		bComputing = false;
+		Player.TurnsPerSecond = MotorTurnsPerSecond;
+		Player.MaxSeconds = MaxPlaybackSeconds;
+		Player.Play(Finished.Events);
+		bPlayingBack = true;
+	}
+	if (bComputing)
+	{
+		SpinAngle += DeltaSeconds * 2.0 * UE_DOUBLE_PI * MotorTurnsPerSecond;
+	}
+	const int32 Bells = Player.Step(DeltaSeconds);
+	const FVector Here = GetActorLocation();
+	for (int32 i = 0; i < FMath::Min(Bells, 2); ++i)
+	{
+		Audio.Play(this, Here, mkb::KeySoundKind::Bell, 1.0, 1.0, SoundVolume * 0.6f);
+	}
+	// A clack each time the crank passes its rest stop.
+	const double Turns = FMath::FloorToDouble((Player.State().CrankAngle + SpinAngle) / (2.0 * UE_DOUBLE_PI));
+	if (Turns > LastCrankTurns)
+	{
+		Audio.Play(this, Here, mkb::KeySoundKind::GearClack, 1.0, 0.6, SoundVolume * 0.35f);
+	}
+	LastCrankTurns = Turns;
+	if (bPlayingBack && !Player.IsPlaying())
+	{
+		bPlayingBack = false;
+		Device.CompleteEvaluation(Finished.Outcome, Finished.Work);
+		RefreshScreen();
+	}
+	if (!Device.Busy())
+	{
+		Player.ShowSetting(mkb::SettingFromInput(Device.Input(), Device.Cursor()));
+	}
 }
 
 void AMechanicalKeyboard::DestroyBuilt()
@@ -495,6 +566,10 @@ void AMechanicalKeyboard::HandleEvents(const mkb::DeviceEvents& Events)
 	{
 		Lights.SetMode(Device.BacklightMode());
 	}
+	if (Events.EvaluationStarted)
+	{
+		StartEvaluation();
+	}
 	if (Events.ScreenChanged)
 	{
 		bCursorOn = true;
@@ -566,6 +641,10 @@ void AMechanicalKeyboard::PhysicalKeyDown(const FKey& Key)
 	}
 	CancelDemo();
 	VisualPress(Index);
+	if (Device.Busy() && bPlayingBack)
+	{
+		Player.SkipToEnd();   // any key hurries the mechanism to its result
+	}
 	LogicalPress(Index);
 }
 
@@ -882,7 +961,11 @@ void AMechanicalKeyboard::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	const float Dt = FMath::Min(DeltaSeconds, 0.05f);
 	Clock += Dt;
-	TickDemo(Dt);
+	if (!Device.Busy())
+	{
+		TickDemo(Dt);
+	}
+	TickMachine(Dt);
 	TickKeys(Dt);
 	TickExplode(Dt);
 	TickBacklight();

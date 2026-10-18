@@ -8,7 +8,7 @@ void FKeyboardAudio::Initialize(int32 InSampleRate)
 {
 	SampleRate = InSampleRate;
 	Banks.Reset();
-	const mkb::KeySoundKind Kinds[] = {mkb::KeySoundKind::BottomOut, mkb::KeySoundKind::TopOut, mkb::KeySoundKind::Click};
+	const mkb::KeySoundKind Kinds[] = {mkb::KeySoundKind::BottomOut, mkb::KeySoundKind::TopOut, mkb::KeySoundKind::Click, mkb::KeySoundKind::Bell, mkb::KeySoundKind::GearClack};
 	const double Widths[] = {1.0, 2.25, 6.25};
 	for (mkb::KeySoundKind Kind : Kinds)
 	{

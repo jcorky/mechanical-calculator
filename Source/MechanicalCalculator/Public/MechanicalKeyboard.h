@@ -3,6 +3,7 @@
 // feeds keystrokes to the calculator firmware (Keyboard/CalculatorDevice.h).
 #pragma once
 
+#include "Async/Future.h"
 #include "Backlight.h"
 #include "CalculatorDevice.h"
 #include "CoreMinimal.h"
@@ -10,6 +11,7 @@
 #include "InputCoreTypes.h"
 #include "KeyboardAudio.h"
 #include "KeyboardParts.h"
+#include "MechanismPlayer.h"
 #include "SwitchModel.h"
 #include "MechanicalKeyboard.generated.h"
 
@@ -58,6 +60,15 @@ struct FKeyboardTheme
 	FLinearColor Screen = FLinearColor(0.42f, 0.92f, 1.0f);
 };
 
+// What comes back from the machine for one line: the result, the work, and the first part of the
+// literal machine's record for the mechanism to play.
+struct FGearEvaluation
+{
+	mcalc::Outcome Outcome;
+	mcalc::GearStats Work;
+	std::vector<mcalc::GearEvent> Events;
+};
+
 UCLASS()
 class MECHANICALCALCULATOR_API AMechanicalKeyboard : public AActor
 {
@@ -68,6 +79,7 @@ public:
 
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaSeconds) override;
 
 	// Physical keyboard events, by engine key (the viewer pawn forwards them).
@@ -124,6 +136,18 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Demo", meta = (ClampMin = "1"))
 	float DemoCharsPerSecond = 12.0f;
+
+	// Motor speed of the calculating mechanism, crank turns per second.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mechanism", meta = (ClampMin = "1", ClampMax = "200"))
+	float MotorTurnsPerSecond = 12.0f;
+
+	// Long evaluations play faster so the mechanism never runs longer than this before printing.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mechanism", meta = (ClampMin = "0.5"))
+	float MaxPlaybackSeconds = 6.0f;
+
+	// How much of each evaluation the literal machine records for playback (events).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mechanism", meta = (ClampMin = "100"))
+	int32 RecordedEvents = 6000;
 
 	// Reverses every triangle, in case an engine version expects the opposite front face.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Advanced")
@@ -191,6 +215,8 @@ private:
 	void CancelDemo();
 	void QueueDemo();
 
+	void StartEvaluation();
+	void TickMachine(float DeltaSeconds);
 	void TickKeys(float DeltaSeconds);
 	void TickExplode(float DeltaSeconds);
 	void TickBacklight();
@@ -212,6 +238,14 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UMaterialInstanceDynamic>> Materials;
+
+	TFuture<FGearEvaluation> Evaluation;
+	FGearEvaluation Finished;
+	mkb::MechanismPlayer Player;
+	bool bComputing = false;
+	bool bPlayingBack = false;
+	double SpinAngle = 0.0;            // the crank while the machine computes, before playback
+	double LastCrankTurns = 0.0;
 
 	mkb::CalculatorDevice Device;
 	mkb::Backlight Lights;
