@@ -255,6 +255,11 @@ TEST(key_sounds)
 	CHECK(mkb::SynthesizeKeySound(P) != A);
 	P.Kind = mkb::KeySoundKind::Click;
 	CHECK(mkb::SynthesizeKeySound(P).size() < A.size());
+	P.Kind = mkb::KeySoundKind::Bell;
+	const std::vector<int16_t> Bell = mkb::SynthesizeKeySound(P);
+	CHECK(Bell.size() > 40000 && Bell.back() == 0);
+	P.Kind = mkb::KeySoundKind::GearClack;
+	CHECK(mkb::SynthesizeKeySound(P).size() < A.size());
 	P.Kind = mkb::KeySoundKind::BottomOut;
 	P.KeyWidthU = 6.25;
 	P.Stabilized = true;

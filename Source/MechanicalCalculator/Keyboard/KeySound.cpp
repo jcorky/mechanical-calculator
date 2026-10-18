@@ -51,14 +51,44 @@ std::vector<int16_t> SynthesizeKeySound(const KeySoundParams& P)
 	const double Width = std::max(1.0, P.KeyWidthU);
 	const bool Down = P.Kind == KeySoundKind::BottomOut;
 	const bool Click = P.Kind == KeySoundKind::Click;
-	const double Duration = Click ? 0.025 : (Down ? 0.09 + 0.02 * std::log(Width) : 0.06);
+	const bool Bell = P.Kind == KeySoundKind::Bell;
+	const bool Clack = P.Kind == KeySoundKind::GearClack;
+	const double Duration = Bell ? 0.9 : (Clack ? 0.05 : (Click ? 0.025 : (Down ? 0.09 + 0.02 * std::log(Width) : 0.06)));
 	const size_t N = static_cast<size_t>(Duration * Rate);
 	std::vector<double> Out(N, 0.0);
 	Noise Rng(P.Seed);
 
 	// Slight per-seed detune so a run of the same key does not sound machine-gunned.
 	const double Detune = 1.0 + 0.04 * Rng.Next();
-	if (Click)
+	if (Bell)
+	{
+		// A small steel gong: partials at the ratios of a circular plate, each decaying at its own rate.
+		const double Base = 1650.0 * Detune;
+		const double Ratios[5] = {1.0, 1.594, 2.136, 2.653, 3.156};
+		const double Decays[5] = {0.55, 0.32, 0.22, 0.15, 0.1};
+		const double Gains[5] = {1.0, 0.6, 0.45, 0.3, 0.2};
+		for (size_t i = 0; i < N; ++i)
+		{
+			const double T = static_cast<double>(i) / Rate;
+			double V = 0.0;
+			for (int k = 0; k < 5; ++k)
+			{
+				V += Gains[k] * std::exp(-T / Decays[k]) * std::sin(kTwoPi * Base * Ratios[k] * T + k);
+			}
+			Out[i] = V * std::min(1.0, T * Rate / 30.0) + 0.3 * Rng.Next() * std::exp(-T / 0.002);
+		}
+	}
+	else if (Clack)
+	{
+		Resonator Body(820.0 * Detune, 500.0, Rate), Tick(3100.0 * Detune, 1500.0, Rate);
+		for (size_t i = 0; i < N; ++i)
+		{
+			const double T = static_cast<double>(i) / Rate;
+			const double X = Rng.Next();
+			Out[i] = 2.0 * Body.Process(X * std::exp(-T / 0.008)) + 1.2 * Tick.Process(X * std::exp(-T / 0.0015));
+		}
+	}
+	else if (Click)
 	{
 		Resonator Hi(4200.0 * Detune, 900.0, Rate), Mid(2600.0 * Detune, 700.0, Rate);
 		for (size_t i = 0; i < N; ++i)
@@ -109,12 +139,12 @@ std::vector<int16_t> SynthesizeKeySound(const KeySoundParams& P)
 	{
 		Peak = std::max(Peak, std::fabs(X));
 	}
-	const double Level = std::clamp(0.35 + 0.45 * P.Strength, 0.1, 0.9) * (Click ? 0.9 : (Down ? 1.0 : 0.6));
+	const double Level = std::clamp(0.35 + 0.45 * P.Strength, 0.1, 0.9) * (Bell ? 0.8 : (Clack ? 0.5 : (Click ? 0.9 : (Down ? 1.0 : 0.6))));
 	std::vector<int16_t> Pcm(N);
 	for (size_t i = 0; i < N; ++i)
 	{
 		// Short fade-out so the buffer ends at silence.
-		const double Fade = std::min(1.0, static_cast<double>(N - i) / (0.002 * Rate));
+		const double Fade = std::min(1.0, static_cast<double>(N - 1 - i) / (0.002 * Rate));
 		const double V = Peak > 0.0 ? Out[i] / Peak * Level * Fade : 0.0;
 		Pcm[i] = static_cast<int16_t>(std::lround(std::clamp(V, -1.0, 1.0) * 32767.0));
 	}

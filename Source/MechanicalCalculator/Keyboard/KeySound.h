@@ -4,6 +4,8 @@
 //   body     damped modes of the case and plate ("thock"); lower and longer for wider keys
 //   click    a short bright transient from the click jacket (clicky switches)
 //   rattle   a few late, quiet impulses from a stabilizer wire on long keys
+//   bell     inharmonic partials of a small gong, slowly decaying (the overdraft bell)
+//   clack    a dull impact plus a ratchet tick (the crank's rest stop)
 #pragma once
 
 #include <cstdint>
@@ -16,6 +18,8 @@ enum class KeySoundKind
 	BottomOut,   // the downstroke reaching the bottom
 	TopOut,      // the release returning to the top
 	Click,       // click jacket
+	Bell,        // the machine's overdraft bell: a struck steel gong
+	GearClack,   // the crank passing its rest stop at the end of a turn
 };
 
 struct KeySoundParams
