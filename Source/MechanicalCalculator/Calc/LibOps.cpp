@@ -16,24 +16,24 @@ namespace mcalc
 {
 namespace ops_detail
 {
-constexpr double OpsInf = std::numeric_limits<double>::infinity();
-constexpr double OpsEps = 1e-9;   // logistics.js EPS
+inline Real OpsInf() { return Real::Infinity(); }
+inline Real OpsEps() { return Real(1e-9); }   // logistics.js EPS
 
-bool OpsWhole(double X, int Lo, int Hi, int* Out)
+bool OpsWhole(Real X, int Lo, int Hi, int* Out)
 {
-	if (!(X >= Lo && X <= Hi && X == std::floor(X)))
+	if (!(X >= Lo && X <= Hi && X == gm::floor(X)))
 	{
 		return false;
 	}
-	*Out = static_cast<int>(X);
+	*Out = X.ToInt();
 	return true;
 }
 
 bool OpsAllFinite(const Matrix& M)
 {
-	for (double X : M.V)
+	for (Real X : M.V)
 	{
-		if (!std::isfinite(X))
+		if (!gm::isfinite(X))
 		{
 			return false;
 		}
@@ -47,8 +47,8 @@ bool OpsSymmetric(const Matrix& A)
 	{
 		for (int j = i + 1; j < A.Cols; ++j)
 		{
-			const double X = A(i, j), Y = A(j, i);
-			if (!(X == Y || std::fabs(X - Y) <= 1e-12 * std::max(1.0, std::max(std::fabs(X), std::fabs(Y)))))
+			const Real X = A(i, j), Y = A(j, i);
+			if (!(X == Y || gm::fabs(X - Y) <= 1e-12 * gm::max(Real(1), gm::max(gm::fabs(X), gm::fabs(Y)))))
 			{
 				return false;
 			}
@@ -65,9 +65,9 @@ bool OpsCostMatrix(const Matrix& W, std::string* Error)
 		*Error = "needs a square cost matrix (inf = no edge)";
 		return false;
 	}
-	for (double X : W.V)
+	for (Real X : W.V)
 	{
-		if (std::isnan(X) || X == -OpsInf)
+		if (gm::isnan(X) || X == -OpsInf())
 		{
 			*Error = "costs must be numbers or inf (no edge)";
 			return false;
@@ -88,7 +88,7 @@ bool OpsAdjacency(const Matrix& A, std::string* Error)
 	{
 		for (int j = 0; j < A.Cols; ++j)
 		{
-			if (i != j && !(std::isfinite(A(i, j)) && A(i, j) >= 0))
+			if (i != j && !(gm::isfinite(A(i, j)) && A(i, j) >= 0))
 			{
 				*Error = "edge weights must be finite and >= 0 (0 = no edge)";
 				return false;
@@ -109,7 +109,7 @@ Matrix OpsLaplacian(const Matrix& A)
 	Matrix L(N, N);
 	for (int i = 0; i < N; ++i)
 	{
-		double Deg = 0.0;
+		Real Deg = 0.0;
 		for (int j = 0; j < N; ++j)
 		{
 			if (j != i)
@@ -148,22 +148,22 @@ Matrix OpsDropRowCol(const Matrix& A, int K)
 
 /* ---------- queues ---------- */
 // Erlang B by the stable recursion B(k) = a B(k-1) / (k + a B(k-1)); Erlang C from it.
-double OpsErlangB(int C, double A)
+Real OpsErlangB(int C, Real A)
 {
-	double B = 1.0;
+	Real B = 1.0;
 	for (int k = 1; k <= C; ++k)
 	{
 		B = A * B / (k + A * B);
 	}
 	return B;
 }
-double OpsErlangC(int C, double A)
+Real OpsErlangC(int C, Real A)
 {
 	if (A >= C)
 	{
 		return 1.0;
 	}
-	const double B = OpsErlangB(C, A);
+	const Real B = OpsErlangB(C, A);
 	return C * B / (C - A * (1.0 - B));
 }
 
@@ -209,7 +209,7 @@ Result ErlangCFn(const Call& C)
 
 Result MmcFn(const Call& C)
 {
-	const double Lam = C.N(0), Mu = C.N(1);
+	const Real Lam = C.N(0), Mu = C.N(1);
 	int Servers = 0;
 	Result F;
 	if (!OpsServers(C, 2, &Servers, &F))
@@ -220,18 +220,18 @@ Result MmcFn(const Call& C)
 	{
 		return Result::Fail("needs lambda >= 0 and mu > 0");
 	}
-	const double A = Lam / Mu, Rho = A / Servers;
+	const Real A = Lam / Mu, Rho = A / Servers;
 	if (Rho >= 1)
 	{
 		return Result::Fail("unstable: rho = lambda/(c mu) >= 1, no steady state");
 	}
-	const double Cw = OpsErlangC(Servers, A), Wq = Cw / (Servers * Mu - Lam), W = Wq + 1.0 / Mu;
+	const Real Cw = OpsErlangC(Servers, A), Wq = Cw / (Servers * Mu - Lam), W = Wq + 1.0 / Mu;
 	return Result::Record({{"rho", Rho}, {"C", Cw}, {"Wq", Wq}, {"W", W}, {"L", Lam * W}, {"Lq", Lam * Wq}});
 }
 
 Result MmcTailFn(const Call& C)
 {
-	const double Lam = C.N(0), Mu = C.N(1), T = C.N(3);
+	const Real Lam = C.N(0), Mu = C.N(1), T = C.N(3);
 	int Servers = 0;
 	Result F;
 	if (!OpsServers(C, 2, &Servers, &F))
@@ -246,7 +246,7 @@ Result MmcTailFn(const Call& C)
 	{
 		return Result::Fail("unstable: rho = lambda/(c mu) >= 1");
 	}
-	return Result::Of(OpsErlangC(Servers, Lam / Mu) * std::exp(-(Servers * Mu - Lam) * T));
+	return Result::Of(OpsErlangC(Servers, Lam / Mu) * gm::exp(-(Servers * Mu - Lam) * T));
 }
 
 Result LittleFn(const Call& C) { return Result::Of(C.N(0) * C.N(1)); }
@@ -254,51 +254,51 @@ Result LittleFn(const Call& C) { return Result::Of(C.N(0) * C.N(1)); }
 // M/G/1 by Pollaczek-Khinchine, with E[S^2] = (1 + cs2)/mu^2.
 Result PkFn(const Call& C)
 {
-	const double Lam = C.N(0), Mu = C.N(1), Cs2 = C.N(2);
+	const Real Lam = C.N(0), Mu = C.N(1), Cs2 = C.N(2);
 	if (!(Lam >= 0 && Mu > 0 && Cs2 >= 0))
 	{
 		return Result::Fail("needs lambda >= 0, mu > 0, cs2 >= 0");
 	}
-	const double Rho = Lam / Mu;
+	const Real Rho = Lam / Mu;
 	if (Rho >= 1)
 	{
 		return Result::Fail("unstable: rho = lambda/mu >= 1");
 	}
-	const double Wq = Lam * ((1.0 + Cs2) / (Mu * Mu)) / (2.0 * (1.0 - Rho)), W = Wq + 1.0 / Mu;
+	const Real Wq = Lam * ((1.0 + Cs2) / (Mu * Mu)) / (2.0 * (1.0 - Rho)), W = Wq + 1.0 / Mu;
 	return Result::Record({{"rho", Rho}, {"Wq", Wq}, {"W", W}, {"L", Lam * W}, {"Lq", Lam * Wq}});
 }
 
 Result KingmanFn(const Call& C)
 {
-	const double Lam = C.N(0), Mu = C.N(1), Ca2 = C.N(2), Cs2 = C.N(3);
+	const Real Lam = C.N(0), Mu = C.N(1), Ca2 = C.N(2), Cs2 = C.N(3);
 	if (!(Lam > 0 && Mu > 0 && Ca2 >= 0 && Cs2 >= 0))
 	{
 		return Result::Fail("needs lambda > 0, mu > 0, ca2 >= 0, cs2 >= 0");
 	}
-	const double Rho = Lam / Mu;
+	const Real Rho = Lam / Mu;
 	if (Rho >= 1)
 	{
 		return Result::Fail("unstable: rho = lambda/mu >= 1");
 	}
-	const double Bound = Lam * (Ca2 / (Lam * Lam) + Cs2 / (Mu * Mu)) / (2.0 * (1.0 - Rho));
-	const double Approx = Rho / (1.0 - Rho) * ((Ca2 + Cs2) / 2.0) / Mu;
+	const Real Bound = Lam * (Ca2 / (Lam * Lam) + Cs2 / (Mu * Mu)) / (2.0 * (1.0 - Rho));
+	const Real Approx = Rho / (1.0 - Rho) * ((Ca2 + Cs2) / 2.0) / Mu;
 	return Result::Record({{"bound", Bound}, {"approx", Approx}});
 }
 
 /* ---------- inventory ---------- */
 Result EoqFn(const Call& C)
 {
-	const double K = C.N(0), D = C.N(1), H = C.N(2);
+	const Real K = C.N(0), D = C.N(1), H = C.N(2);
 	if (!(K >= 0 && D >= 0 && H > 0))
 	{
 		return Result::Fail("needs K >= 0, D >= 0, h > 0");
 	}
-	return Result::Of(std::sqrt(2.0 * K * D / H));
+	return Result::Of(gm::sqrt(2.0 * K * D / H));
 }
 
 Result EoqCostFn(const Call& C)
 {
-	const double Q = C.N(0), K = C.N(1), D = C.N(2), H = C.N(3);
+	const Real Q = C.N(0), K = C.N(1), D = C.N(2), H = C.N(3);
 	if (!(Q > 0))
 	{
 		return Result::Fail("order quantity Q must be > 0");
@@ -308,7 +308,7 @@ Result EoqCostFn(const Call& C)
 
 Result FractileFn(const Call& C)
 {
-	const double Price = C.N(0), Cost = C.N(1), Salv = C.N(2);
+	const Real Price = C.N(0), Cost = C.N(1), Salv = C.N(2);
 	if (!(Price > Salv))
 	{
 		return Result::Fail("price must exceed salvage");
@@ -319,21 +319,21 @@ Result FractileFn(const Call& C)
 // Poisson(mean) demand truncated at 150 terms, as in logistics.js newsvendor().
 struct OpsNewsvendor
 {
-	std::vector<double> Pm, Cdf;
-	double Price = 0, Cost = 0, Salv = 0;
+	std::vector<Real> Pm, Cdf;
+	Real Price = 0, Cost = 0, Salv = 0;
 
-	double Profit(double Q) const
+	Real Profit(Real Q) const
 	{
-		double E = 0.0;
+		Real E = 0.0;
 		for (int d = 0; d < 150; ++d)
 		{
-			E += Pm[static_cast<size_t>(d)] * (Price * std::min(static_cast<double>(d), Q) + Salv * std::max(Q - d, 0.0));
+			E += Pm[static_cast<size_t>(d)] * (Price * gm::min(Real(d), Q) + Salv * gm::max(Q - d, Real(0)));
 		}
 		return E - Cost * Q;
 	}
 };
 
-bool OpsMakeNewsvendor(double Price, double Cost, double Salv, double Mean, OpsNewsvendor* Nv, std::string* Error)
+bool OpsMakeNewsvendor(Real Price, Real Cost, Real Salv, Real Mean, OpsNewsvendor* Nv, std::string* Error)
 {
 	if (!(Price > Salv))
 	{
@@ -350,12 +350,12 @@ bool OpsMakeNewsvendor(double Price, double Cost, double Salv, double Mean, OpsN
 	Nv->Salv = Salv;
 	Nv->Pm.assign(150, 0.0);
 	Nv->Cdf.assign(150, 0.0);
-	Nv->Pm[0] = std::exp(-Mean);
+	Nv->Pm[0] = gm::exp(-Mean);
 	for (int k = 1; k < 150; ++k)
 	{
 		Nv->Pm[static_cast<size_t>(k)] = Nv->Pm[static_cast<size_t>(k - 1)] * Mean / k;
 	}
-	double S = 0.0;
+	Real S = 0.0;
 	for (int k = 0; k < 150; ++k)
 	{
 		S += Nv->Pm[static_cast<size_t>(k)];
@@ -372,7 +372,7 @@ Result NewsvendorFn(const Call& C)
 	{
 		return Result::Fail(E);
 	}
-	const double Crit = (Nv.Price - Nv.Cost) / (Nv.Price - Nv.Salv);
+	const Real Crit = (Nv.Price - Nv.Cost) / (Nv.Price - Nv.Salv);
 	int QStar = -1;
 	for (int i = 0; i < 150; ++i)
 	{
@@ -390,7 +390,7 @@ Result NewsvendorFn(const Call& C)
 			QBest = q;
 		}
 	}
-	return Result::Record({{"crit", Crit}, {"q", static_cast<double>(QStar)}, {"profit", Nv.Profit(QStar)}, {"qbest", static_cast<double>(QBest)}});
+	return Result::Record({{"crit", Crit}, {"q", Real(QStar)}, {"profit", Nv.Profit(QStar)}, {"qbest", Real(QBest)}});
 }
 
 Result NvProfitFn(const Call& C)
@@ -415,25 +415,25 @@ constexpr int OpsInvN = OpsInvHi - OpsInvLo + 1;
 
 struct OpsInvTables
 {
-	double Pmf[11];
-	std::vector<double> Lf;
+	Real Pmf[11];
+	std::vector<Real> Lf;
 	std::vector<int> Idx;   // OpsInvN x 11
 
-	OpsInvTables(double H, double P) : Lf(OpsInvN, 0.0), Idx(static_cast<size_t>(OpsInvN) * 11, 0)
+	OpsInvTables(Real H, Real P) : Lf(OpsInvN, 0.0), Idx(static_cast<size_t>(OpsInvN) * 11, 0)
 	{
 		for (int d = 0; d <= 10; ++d)
 		{
-			double Cb = 1.0;
+			Real Cb = 1.0;
 			for (int i = 0; i < d; ++i)
 			{
 				Cb = Cb * (10 - i) / (i + 1);
 			}
-			Pmf[d] = std::round(Cb) * std::pow(0.4, d) * std::pow(0.6, 10 - d);
+			Pmf[d] = gm::round(Cb) * gm::pow(0.4, d) * gm::pow(0.6, 10 - d);
 		}
 		for (int i = 0; i < OpsInvN; ++i)
 		{
 			const int Y = OpsInvLo + i;
-			double S = 0.0;
+			Real S = 0.0;
 			for (int d = 0; d <= 10; ++d)
 			{
 				S += Pmf[d] * (H * std::max(Y - d, 0) + P * std::max(d - Y, 0));
@@ -442,9 +442,9 @@ struct OpsInvTables
 			Lf[static_cast<size_t>(i)] = S;
 		}
 	}
-	double Expect(const std::vector<double>& V, int I) const
+	Real Expect(const std::vector<Real>& V, int I) const
 	{
-		double E = 0.0;
+		Real E = 0.0;
 		for (int d = 0; d <= 10; ++d)
 		{
 			E += Pmf[d] * V[static_cast<size_t>(Idx[static_cast<size_t>(I) * 11 + static_cast<size_t>(d)])];
@@ -453,7 +453,7 @@ struct OpsInvTables
 	}
 };
 
-bool OpsInvParams(const Call& C, size_t First, double* K, double* P, double* H, double* Cu, double* Alpha, std::string* Error)
+bool OpsInvParams(const Call& C, size_t First, Real* K, Real* P, Real* H, Real* Cu, Real* Alpha, std::string* Error)
 {
 	*K = C.N(First);
 	*P = C.N(First + 1);
@@ -476,7 +476,7 @@ bool OpsInvParams(const Call& C, size_t First, double* K, double* P, double* H, 
 // Value iteration for the discounted problem with setup cost K (logistics.js ssDP).
 Result SsFn(const Call& C)
 {
-	double K = 0, P = 0, H = 0, Cu = 0, Alpha = 0;
+	Real K = 0, P = 0, H = 0, Cu = 0, Alpha = 0;
 	std::string E;
 	if (!OpsInvParams(C, 0, &K, &P, &H, &Cu, &Alpha, &E))
 	{
@@ -484,7 +484,7 @@ Result SsFn(const Call& C)
 	}
 	const OpsInvTables T(H, P);
 	const int N = OpsInvN;
-	std::vector<double> V(static_cast<size_t>(N), 0.0), G(static_cast<size_t>(N)), Suf(static_cast<size_t>(N)), Vn(static_cast<size_t>(N));
+	std::vector<Real> V(static_cast<size_t>(N), 0.0), G(static_cast<size_t>(N)), Suf(static_cast<size_t>(N)), Vn(static_cast<size_t>(N));
 	auto ComputeG = [&]() {
 		for (int i = 0; i < N; ++i)
 		{
@@ -497,13 +497,13 @@ Result SsFn(const Call& C)
 		Suf[static_cast<size_t>(N - 1)] = G[static_cast<size_t>(N - 1)];
 		for (int i = N - 2; i >= 0; --i)
 		{
-			Suf[static_cast<size_t>(i)] = std::min(G[static_cast<size_t>(i)], Suf[static_cast<size_t>(i + 1)]);
+			Suf[static_cast<size_t>(i)] = gm::min(G[static_cast<size_t>(i)], Suf[static_cast<size_t>(i + 1)]);
 		}
-		double Df = 0.0;
+		Real Df = 0.0;
 		for (int i = 0; i < N; ++i)
 		{
-			Vn[static_cast<size_t>(i)] = std::min(G[static_cast<size_t>(i)], K + Suf[static_cast<size_t>(i)]) - Cu * (OpsInvLo + i);
-			Df = std::max(Df, std::fabs(Vn[static_cast<size_t>(i)] - V[static_cast<size_t>(i)]));
+			Vn[static_cast<size_t>(i)] = gm::min(G[static_cast<size_t>(i)], K + Suf[static_cast<size_t>(i)]) - Cu * (OpsInvLo + i);
+			Df = gm::max(Df, gm::fabs(Vn[static_cast<size_t>(i)] - V[static_cast<size_t>(i)]));
 		}
 		V.swap(Vn);
 		if (Df < 1e-13)
@@ -520,7 +520,7 @@ Result SsFn(const Call& C)
 			IS = i;
 		}
 	}
-	const double Gs = G[static_cast<size_t>(IS)];
+	const Real Gs = G[static_cast<size_t>(IS)];
 	int Small = OpsInvLo + IS;
 	for (int i = 0; i < N; ++i)
 	{
@@ -530,7 +530,7 @@ Result SsFn(const Call& C)
 			break;
 		}
 	}
-	return Result::Record({{"s", static_cast<double>(Small)}, {"S", static_cast<double>(OpsInvLo + IS)}, {"v0", V[static_cast<size_t>(-OpsInvLo)]}});
+	return Result::Record({{"s", Real(Small)}, {"S", Real(OpsInvLo + IS)}, {"v0", V[static_cast<size_t>(-OpsInvLo)]}});
 }
 
 // Exact discounted cost from stock x of a fixed (s, S) policy (logistics.js ssEval).
@@ -541,7 +541,7 @@ Result SsCostFn(const Call& C)
 	{
 		return Result::Fail("needs whole numbers -30 <= s <= S <= 60");
 	}
-	double K = 0, P = 0, H = 0, Cu = 0, Alpha = 0;
+	Real K = 0, P = 0, H = 0, Cu = 0, Alpha = 0;
 	std::string E;
 	if (!OpsInvParams(C, 2, &K, &P, &H, &Cu, &Alpha, &E))
 	{
@@ -553,7 +553,7 @@ Result SsCostFn(const Call& C)
 	}
 	const OpsInvTables T(H, P);
 	const int N = OpsInvN;
-	std::vector<double> R(static_cast<size_t>(N)), V(static_cast<size_t>(N), 0.0), W(static_cast<size_t>(N));
+	std::vector<Real> R(static_cast<size_t>(N)), V(static_cast<size_t>(N), 0.0), W(static_cast<size_t>(N));
 	std::vector<int> Next(static_cast<size_t>(N));
 	for (int i = 0; i < N; ++i)
 	{
@@ -563,11 +563,11 @@ Result SsCostFn(const Call& C)
 	}
 	for (int It = 0; It < 5000; ++It)
 	{
-		double Df = 0.0;
+		Real Df = 0.0;
 		for (int i = 0; i < N; ++i)
 		{
 			W[static_cast<size_t>(i)] = R[static_cast<size_t>(i)] + Alpha * T.Expect(V, Next[static_cast<size_t>(i)]);
-			Df = std::max(Df, std::fabs(W[static_cast<size_t>(i)] - V[static_cast<size_t>(i)]));
+			Df = gm::max(Df, gm::fabs(W[static_cast<size_t>(i)] - V[static_cast<size_t>(i)]));
 		}
 		V.swap(W);
 		if (Df < 1e-12)
@@ -581,7 +581,7 @@ Result SsCostFn(const Call& C)
 /* ---------- networks: max flow ---------- */
 struct OpsFlow
 {
-	double Value = 0.0;
+	Real Value = 0.0;
 	int Aug = 0;
 	int Reach = 0;
 	Matrix F;
@@ -591,8 +591,9 @@ struct OpsFlow
 void OpsMaxFlow(const Matrix& Cap, int S, int T, OpsFlow* Out)
 {
 	const int N = Cap.Rows;
+	const Real Tiny = 1e-12;
 	Matrix F(N, N);
-	double Total = 0.0;
+	Real Total = 0.0;
 	int Aug = 0;
 	for (;;)
 	{
@@ -604,7 +605,7 @@ void OpsMaxFlow(const Matrix& Cap, int S, int T, OpsFlow* Out)
 			const int X = Q[h];
 			for (int y = 0; y < N; ++y)
 			{
-				if (Prev[static_cast<size_t>(y)] < 0 && Cap(X, y) - F(X, y) + F(y, X) > 1e-12)
+				if (Prev[static_cast<size_t>(y)] < 0 && Cap(X, y) - F(X, y) + F(y, X) > Tiny)
 				{
 					Prev[static_cast<size_t>(y)] = X;
 					Q.push_back(y);
@@ -625,16 +626,16 @@ void OpsMaxFlow(const Matrix& Cap, int S, int T, OpsFlow* Out)
 			Path.push_back(Prev[static_cast<size_t>(Path.back())]);
 		}
 		std::reverse(Path.begin(), Path.end());
-		double Th = OpsInf;
+		Real Th = OpsInf();
 		for (size_t k = 0; k + 1 < Path.size(); ++k)
 		{
 			const int A = Path[k], B = Path[k + 1];
-			Th = std::min(Th, Cap(A, B) - F(A, B) + F(B, A));
+			Th = gm::min(Th, Cap(A, B) - F(A, B) + F(B, A));
 		}
 		for (size_t k = 0; k + 1 < Path.size(); ++k)
 		{
 			const int A = Path[k], B = Path[k + 1];
-			const double Back = std::min(F(B, A), Th);
+			const Real Back = gm::min(F(B, A), Th);
 			F(B, A) -= Back;
 			F(A, B) += Th - Back;
 		}
@@ -651,16 +652,16 @@ bool OpsFlowArgs(const Call& C, int* S, int* T, std::string* Error)
 		*Error = "needs a square capacity matrix (0 = no lane)";
 		return false;
 	}
-	for (double X : Cap.V)
+	for (Real X : Cap.V)
 	{
-		if (!(std::isfinite(X) && X >= 0))
+		if (!(gm::isfinite(X) && X >= 0))
 		{
 			*Error = "capacities must be finite and >= 0";
 			return false;
 		}
 	}
 	const int N = Cap.Rows;
-	const double TArg = C.N(2) == 0 ? N : C.N(2);
+	const Real TArg = C.N(2) == 0 ? N : C.N(2);
 	if (!OpsWhole(C.N(1), 1, N, S) || !OpsWhole(TArg, 1, N, T) || *S == *T)
 	{
 		*Error = "source and sink must be different nodes 1..n";
@@ -681,7 +682,7 @@ Result MaxFlowFn(const Call& C)
 	}
 	OpsFlow Fl;
 	OpsMaxFlow(C.M(0), S, T, &Fl);
-	return Result::Record({{"flow", Fl.Value}, {"aug", static_cast<double>(Fl.Aug)}, {"ns", static_cast<double>(Fl.Reach)}});
+	return Result::Record({{"flow", Fl.Value}, {"aug", Real(Fl.Aug)}, {"ns", Real(Fl.Reach)}});
 }
 
 Result FlowMatFn(const Call& C)
@@ -701,22 +702,23 @@ Result FlowMatFn(const Call& C)
 struct OpsTransport
 {
 	Matrix X;
-	std::vector<double> U, V;
-	double Cost = 0.0;
+	std::vector<Real> U, V;
+	Real Cost = 0.0;
 };
 
 // North-west corner, potentials on the basis tree, Bland's entering rule, stepping-stone cycle by
 // depth-first search, smallest-index leaving cell (logistics.js transport, step for step).
-bool OpsTransportSolve(const std::vector<double>& Sup, const std::vector<double>& Dem, const Matrix& Cm, OpsTransport* Out, std::string* Error)
+bool OpsTransportSolve(const std::vector<Real>& Sup, const std::vector<Real>& Dem, const Matrix& Cm, OpsTransport* Out, std::string* Error)
 {
+	const Real Eps = OpsEps();
 	const int M = static_cast<int>(Sup.size()), N = static_cast<int>(Dem.size());
-	std::vector<double> S = Sup, D = Dem;
+	std::vector<Real> S = Sup, D = Dem;
 	Matrix X(M, N);
 	std::vector<std::pair<int, int>> Basis;
 	int I = 0, J = 0;
 	for (;;)
 	{
-		const double Q = std::min(S[static_cast<size_t>(I)], D[static_cast<size_t>(J)]);
+		const Real Q = gm::min(S[static_cast<size_t>(I)], D[static_cast<size_t>(J)]);
 		X(I, J) = Q;
 		Basis.push_back({I, J});
 		S[static_cast<size_t>(I)] -= Q;
@@ -733,7 +735,7 @@ bool OpsTransportSolve(const std::vector<double>& Sup, const std::vector<double>
 		{
 			++I;
 		}
-		else if (S[static_cast<size_t>(I)] <= OpsEps)
+		else if (S[static_cast<size_t>(I)] <= Eps)
 		{
 			++I;
 		}
@@ -754,7 +756,7 @@ bool OpsTransportSolve(const std::vector<double>& Sup, const std::vector<double>
 	};
 	for (int It = 0; It < 1000; ++It)
 	{
-		std::vector<double> U(static_cast<size_t>(M), 0.0), V(static_cast<size_t>(N), 0.0);
+		std::vector<Real> U(static_cast<size_t>(M), 0.0), V(static_cast<size_t>(N), 0.0);
 		std::vector<char> HasU(static_cast<size_t>(M), 0), HasV(static_cast<size_t>(N), 0);
 		HasU[0] = 1;
 		bool Changed = true;
@@ -783,7 +785,7 @@ bool OpsTransportSolve(const std::vector<double>& Sup, const std::vector<double>
 		{
 			for (int b = 0; b < N; ++b)
 			{
-				if (!InBasis(a, b) && Cm(a, b) - U[static_cast<size_t>(a)] - V[static_cast<size_t>(b)] < -OpsEps)
+				if (!InBasis(a, b) && Cm(a, b) - U[static_cast<size_t>(a)] - V[static_cast<size_t>(b)] < -Eps)
 				{
 					EntA = a;
 					EntB = b;
@@ -793,10 +795,10 @@ bool OpsTransportSolve(const std::vector<double>& Sup, const std::vector<double>
 		}
 		if (EntA < 0)
 		{
-			double Cost = 0.0;
+			Real Cost = 0.0;
 			for (int a = 0; a < M; ++a)
 			{
-				double Row = 0.0;
+				Real Row = 0.0;
 				for (int b = 0; b < N; ++b)
 				{
 					Row += X(a, b) * Cm(a, b);
@@ -855,15 +857,15 @@ bool OpsTransportSolve(const std::vector<double>& Sup, const std::vector<double>
 			const std::pair<int, int> Cell = P < M ? std::make_pair(P, Q - M) : std::make_pair(Q, P - M);
 			(k % 2 == 0 ? Minus : Plus).push_back(Cell);
 		}
-		double Th = OpsInf;
+		Real Th = OpsInf();
 		for (const auto& Cell : Minus)
 		{
-			Th = std::min(Th, X(Cell.first, Cell.second));
+			Th = gm::min(Th, X(Cell.first, Cell.second));
 		}
 		std::pair<int, int> Leave = {-1, -1};
 		for (const auto& Cell : Minus)
 		{
-			if (X(Cell.first, Cell.second) <= Th + OpsEps && (Leave.first < 0 || Cell < Leave))
+			if (X(Cell.first, Cell.second) <= Th + Eps && (Leave.first < 0 || Cell < Leave))
 			{
 				Leave = Cell;
 			}
@@ -910,8 +912,8 @@ bool OpsTransportArgs(const Call& C, OpsTransport* Out, std::string* Error)
 		*Error = "supplies, demands and costs must be finite";
 		return false;
 	}
-	double Ts = 0.0, Td = 0.0;
-	for (double X : Sm.V)
+	Real Ts = 0.0, Td = 0.0;
+	for (Real X : Sm.V)
 	{
 		if (X < 0)
 		{
@@ -920,7 +922,7 @@ bool OpsTransportArgs(const Call& C, OpsTransport* Out, std::string* Error)
 		}
 		Ts += X;
 	}
-	for (double X : Dm.V)
+	for (Real X : Dm.V)
 	{
 		if (X < 0)
 		{
@@ -929,7 +931,7 @@ bool OpsTransportArgs(const Call& C, OpsTransport* Out, std::string* Error)
 		}
 		Td += X;
 	}
-	if (std::fabs(Ts - Td) > 1e-9 * std::max(1.0, Ts))
+	if (gm::fabs(Ts - Td) > 1e-9 * gm::max(Real(1), Ts))
 	{
 		*Error = "total supply must equal total demand";
 		return false;
@@ -967,13 +969,13 @@ Result TPricesFn(const Call& C)
 	{
 		return Result::Fail(E);
 	}
-	std::vector<double> UV = T.U;
+	std::vector<Real> UV = T.U;
 	UV.insert(UV.end(), T.V.begin(), T.V.end());
 	return Result::Of(Matrix::Row(UV));
 }
 
 /* ---------- networks: assignment (Hungarian method with potentials) ---------- */
-bool OpsAssign(const Matrix& Cm, std::vector<int>* Perm, double* Cost, std::string* Error)
+bool OpsAssign(const Matrix& Cm, std::vector<int>* Perm, Real* Cost, std::string* Error)
 {
 	if (!Cm.IsSquare())
 	{
@@ -986,25 +988,25 @@ bool OpsAssign(const Matrix& Cm, std::vector<int>* Perm, double* Cost, std::stri
 		return false;
 	}
 	const int N = Cm.Rows;
-	std::vector<double> U(static_cast<size_t>(N + 1), 0.0), V(static_cast<size_t>(N + 1), 0.0);
+	std::vector<Real> U(static_cast<size_t>(N + 1), 0.0), V(static_cast<size_t>(N + 1), 0.0);
 	std::vector<int> P(static_cast<size_t>(N + 1), 0), Way(static_cast<size_t>(N + 1), 0);
 	for (int i = 1; i <= N; ++i)
 	{
 		P[0] = i;
 		int J0 = 0;
-		std::vector<double> MinV(static_cast<size_t>(N + 1), OpsInf);
+		std::vector<Real> MinV(static_cast<size_t>(N + 1), OpsInf());
 		std::vector<char> Used(static_cast<size_t>(N + 1), 0);
 		do
 		{
 			Used[static_cast<size_t>(J0)] = 1;
 			const int I0 = P[static_cast<size_t>(J0)];
-			double Delta = OpsInf;
+			Real Delta = OpsInf();
 			int J1 = 0;
 			for (int j = 1; j <= N; ++j)
 			{
 				if (!Used[static_cast<size_t>(j)])
 				{
-					const double Cur = Cm(I0 - 1, j - 1) - U[static_cast<size_t>(I0)] - V[static_cast<size_t>(j)];
+					const Real Cur = Cm(I0 - 1, j - 1) - U[static_cast<size_t>(I0)] - V[static_cast<size_t>(j)];
 					if (Cur < MinV[static_cast<size_t>(j)])
 					{
 						MinV[static_cast<size_t>(j)] = Cur;
@@ -1043,7 +1045,7 @@ bool OpsAssign(const Matrix& Cm, std::vector<int>* Perm, double* Cost, std::stri
 	{
 		(*Perm)[static_cast<size_t>(P[static_cast<size_t>(j)] - 1)] = j - 1;
 	}
-	double S = 0.0;
+	Real S = 0.0;
 	for (int i = 0; i < N; ++i)
 	{
 		S += Cm(i, (*Perm)[static_cast<size_t>(i)]);
@@ -1055,7 +1057,7 @@ bool OpsAssign(const Matrix& Cm, std::vector<int>* Perm, double* Cost, std::stri
 Result AssignFn(const Call& C)
 {
 	std::vector<int> Perm;
-	double Cost = 0.0;
+	Real Cost = 0.0;
 	std::string E;
 	if (!OpsAssign(C.M(0), &Perm, &Cost, &E))
 	{
@@ -1067,13 +1069,13 @@ Result AssignFn(const Call& C)
 Result AssignPermFn(const Call& C)
 {
 	std::vector<int> Perm;
-	double Cost = 0.0;
+	Real Cost = 0.0;
 	std::string E;
 	if (!OpsAssign(C.M(0), &Perm, &Cost, &E))
 	{
 		return Result::Fail(E);
 	}
-	std::vector<double> Out;
+	std::vector<Real> Out;
 	for (int P : Perm)
 	{
 		Out.push_back(P + 1.0);
@@ -1084,9 +1086,9 @@ Result AssignPermFn(const Call& C)
 /* ---------- networks: max-plus ---------- */
 bool OpsMaxPlusMatrix(const Matrix& A, std::string* Error)
 {
-	for (double X : A.V)
+	for (Real X : A.V)
 	{
-		if (std::isnan(X) || X == OpsInf)
+		if (gm::isnan(X) || X == OpsInf())
 		{
 			*Error = "max-plus entries must be numbers or -inf (no arc)";
 			return false;
@@ -1097,15 +1099,15 @@ bool OpsMaxPlusMatrix(const Matrix& A, std::string* Error)
 
 Matrix OpsOtimes(const Matrix& A, const Matrix& B)
 {
-	Matrix Out(A.Rows, B.Cols, -OpsInf);
+	Matrix Out(A.Rows, B.Cols, -OpsInf());
 	for (int i = 0; i < A.Rows; ++i)
 	{
 		for (int j = 0; j < B.Cols; ++j)
 		{
-			double Best = -OpsInf;
+			Real Best = -OpsInf();
 			for (int k = 0; k < A.Cols; ++k)
 			{
-				Best = std::max(Best, A(i, k) + B(k, j));
+				Best = gm::max(Best, A(i, k) + B(k, j));
 			}
 			Out(i, j) = Best;
 		}
@@ -1128,31 +1130,31 @@ Result KarpFn(const Call& C)
 	}
 	const int N = A.Rows;
 	std::vector<Matrix> D;
-	Matrix D0(N, 1, -OpsInf);
+	Matrix D0(N, 1, -OpsInf());
 	D0.V[0] = 0.0;
 	D.push_back(D0);
 	for (int k = 1; k <= N; ++k)
 	{
 		D.push_back(OpsOtimes(A, D.back()));
 	}
-	double Best = -OpsInf;
+	Real Best = -OpsInf();
 	for (int v = 0; v < N; ++v)
 	{
-		const double Dn = D[static_cast<size_t>(N)].V[static_cast<size_t>(v)];
-		if (Dn == -OpsInf)
+		const Real Dn = D[static_cast<size_t>(N)].V[static_cast<size_t>(v)];
+		if (Dn == -OpsInf())
 		{
 			continue;
 		}
-		double M = OpsInf;
+		Real M = OpsInf();
 		for (int k = 0; k < N; ++k)
 		{
-			const double Dk = D[static_cast<size_t>(k)].V[static_cast<size_t>(v)];
-			if (Dk > -OpsInf)
+			const Real Dk = D[static_cast<size_t>(k)].V[static_cast<size_t>(v)];
+			if (Dk > -OpsInf())
 			{
-				M = std::min(M, (Dn - Dk) / (N - k));
+				M = gm::min(M, (Dn - Dk) / (N - k));
 			}
 		}
-		Best = std::max(Best, M);
+		Best = gm::max(Best, M);
 	}
 	return Result::Of(Best);
 }
@@ -1189,7 +1191,7 @@ Result MpPowFn(const Call& C)
 	{
 		return Result::Fail("power k must be a whole number 0..1000");
 	}
-	Matrix P(A.Rows, A.Rows, -OpsInf);
+	Matrix P(A.Rows, A.Rows, -OpsInf());
 	for (int i = 0; i < A.Rows; ++i)
 	{
 		P(i, i) = 0.0;
@@ -1203,13 +1205,13 @@ Result MpPowFn(const Call& C)
 
 /* ---------- networks: optimal transport on a line ---------- */
 // W1 = integral |F - G| of the cumulative masses (logistics.js w1cdf).
-double OpsW1Cdf(const std::vector<double>& X, const std::vector<double>& A, const std::vector<double>& Y, const std::vector<double>& B)
+Real OpsW1Cdf(const std::vector<Real>& X, const std::vector<Real>& A, const std::vector<Real>& Y, const std::vector<Real>& B)
 {
-	std::vector<double> Pts = X;
+	std::vector<Real> Pts = X;
 	Pts.insert(Pts.end(), Y.begin(), Y.end());
 	std::sort(Pts.begin(), Pts.end());
 	Pts.erase(std::unique(Pts.begin(), Pts.end()), Pts.end());
-	double F = 0.0, G = 0.0, W = 0.0;
+	Real F = 0.0, G = 0.0, W = 0.0;
 	for (size_t k = 0; k + 1 < Pts.size(); ++k)
 	{
 		for (size_t i = 0; i < X.size(); ++i)
@@ -1226,7 +1228,7 @@ double OpsW1Cdf(const std::vector<double>& X, const std::vector<double>& A, cons
 				G += B[j];
 			}
 		}
-		W += std::fabs(F - G) * (Pts[k + 1] - Pts[k]);
+		W += gm::fabs(F - G) * (Pts[k + 1] - Pts[k]);
 	}
 	return W;
 }
@@ -1242,7 +1244,7 @@ Result W1Fn(const Call& C)
 	{
 		return Result::Fail("too many samples");
 	}
-	const std::vector<double> A(X.V.size(), 1.0 / X.Count()), B(Y.V.size(), 1.0 / Y.Count());
+	const std::vector<Real> A(X.V.size(), 1.0 / X.Count()), B(Y.V.size(), 1.0 / Y.Count());
 	return Result::Of(OpsW1Cdf(X.V, A, Y.V, B));
 }
 
@@ -1259,7 +1261,7 @@ bool OpsMassArgs(const Call& C, std::string* Error)
 		*Error = "points and masses must be finite";
 		return false;
 	}
-	for (double M : A.V)
+	for (Real M : A.V)
 	{
 		if (M < 0)
 		{
@@ -1267,7 +1269,7 @@ bool OpsMassArgs(const Call& C, std::string* Error)
 			return false;
 		}
 	}
-	for (double M : B.V)
+	for (Real M : B.V)
 	{
 		if (M < 0)
 		{
@@ -1300,19 +1302,19 @@ Result OtMonoFn(const Call& C)
 	{
 		return Result::Fail(E);
 	}
-	const double P = C.N(4);
+	const Real P = C.N(4);
 	if (!(P > 0))
 	{
 		return Result::Fail("exponent p must be > 0");
 	}
-	const std::vector<double> &X = C.M(0).V, &Y = C.M(2).V;
+	const std::vector<Real> &X = C.M(0).V, &Y = C.M(2).V;
 	std::vector<size_t> Ix(X.size()), Iy(Y.size());
 	std::iota(Ix.begin(), Ix.end(), size_t(0));
 	std::iota(Iy.begin(), Iy.end(), size_t(0));
 	std::stable_sort(Ix.begin(), Ix.end(), [&X](size_t p, size_t q) { return X[p] < X[q]; });
 	std::stable_sort(Iy.begin(), Iy.end(), [&Y](size_t p, size_t q) { return Y[p] < Y[q]; });
-	std::vector<double> A, B;
-	double Ta = 0.0, Tb = 0.0;
+	std::vector<Real> A, B;
+	Real Ta = 0.0, Tb = 0.0;
 	for (size_t i : Ix)
 	{
 		A.push_back(C.M(1).V[i]);
@@ -1323,7 +1325,7 @@ Result OtMonoFn(const Call& C)
 		B.push_back(C.M(3).V[j]);
 		Tb += C.M(3).V[j];
 	}
-	if (std::fabs(Ta - Tb) > 1e-9 * std::max(1.0, Ta))
+	if (gm::fabs(Ta - Tb) > 1e-9 * gm::max(Real(1), Ta))
 	{
 		return Result::Fail("total masses must be equal");
 	}
@@ -1332,7 +1334,7 @@ Result OtMonoFn(const Call& C)
 	size_t i = 0, j = 0;
 	while (i < M && j < N)
 	{
-		const double Q = std::min(A[i], B[j]);
+		const Real Q = gm::min(A[i], B[j]);
 		Plan(static_cast<int>(i), static_cast<int>(j)) += Q;
 		A[i] -= Q;
 		B[j] -= Q;
@@ -1345,13 +1347,13 @@ Result OtMonoFn(const Call& C)
 			++j;
 		}
 	}
-	double Cost = 0.0;
+	Real Cost = 0.0;
 	for (size_t r = 0; r < M; ++r)
 	{
-		double Row = 0.0;
+		Real Row = 0.0;
 		for (size_t c = 0; c < N; ++c)
 		{
-			Row += Plan(static_cast<int>(r), static_cast<int>(c)) * std::pow(std::fabs(X[Ix[r]] - Y[Iy[c]]), P);
+			Row += Plan(static_cast<int>(r), static_cast<int>(c)) * gm::pow(gm::fabs(X[Ix[r]] - Y[Iy[c]]), P);
 		}
 		Cost += Row;
 	}
@@ -1374,7 +1376,7 @@ Result MstFn(const Call& C)
 	const int N = W.Rows;
 	struct Edge
 	{
-		double W;
+		Real W;
 		int U, V;
 	};
 	std::vector<Edge> Edges;
@@ -1382,7 +1384,7 @@ Result MstFn(const Call& C)
 	{
 		for (int j = i + 1; j < N; ++j)
 		{
-			if (std::isfinite(W(i, j)))
+			if (gm::isfinite(W(i, j)))
 			{
 				Edges.push_back({W(i, j), i, j});
 			}
@@ -1398,7 +1400,7 @@ Result MstFn(const Call& C)
 		}
 		return X;
 	};
-	double Total = 0.0;
+	Real Total = 0.0;
 	int Count = 0;
 	for (const Edge& Ed : Edges)
 	{
@@ -1430,15 +1432,15 @@ Result DistMatFn(const Call& C)
 	{
 		for (int j = 0; j < N; ++j)
 		{
-			D(i, j) = std::hypot(P(i, 0) - P(j, 0), P(i, 1) - P(j, 1));
+			D(i, j) = gm::hypot(P(i, 0) - P(j, 0), P(i, 1) - P(j, 1));
 		}
 	}
 	return Result::Of(D);
 }
 
-double OpsTourLen(const Matrix& D, const std::vector<int>& T)
+Real OpsTourLen(const Matrix& D, const std::vector<int>& T)
 {
-	double L = 0.0;
+	Real L = 0.0;
 	for (size_t k = 0; k < T.size(); ++k)
 	{
 		L += D(T[k], T[(k + 1) % T.size()]);
@@ -1459,7 +1461,7 @@ Result TourLenFn(const Call& C)
 		return Result::Fail("tour must be a vector of stops 1..n");
 	}
 	std::vector<int> T;
-	for (double X : Tm.V)
+	for (Real X : Tm.V)
 	{
 		int I = 0;
 		if (!OpsWhole(X, 1, D.Rows, &I))
@@ -1490,8 +1492,8 @@ Result TspFn(const Call& C)
 		return Result::Of(0.0);
 	}
 	const int M = N - 1, Full = (1 << M) - 1;
-	std::vector<double> Dp(static_cast<size_t>(1 << M) * static_cast<size_t>(M), OpsInf);
-	auto At = [&Dp, M](int Mask, int J) -> double& { return Dp[static_cast<size_t>(Mask) * static_cast<size_t>(M) + static_cast<size_t>(J)]; };
+	std::vector<Real> Dp(static_cast<size_t>(1 << M) * static_cast<size_t>(M), OpsInf());
+	auto At = [&Dp, M](int Mask, int J) -> Real& { return Dp[static_cast<size_t>(Mask) * static_cast<size_t>(M) + static_cast<size_t>(J)]; };
 	for (int j = 0; j < M; ++j)
 	{
 		At(1 << j, j) = D(0, j + 1);
@@ -1500,8 +1502,8 @@ Result TspFn(const Call& C)
 	{
 		for (int j = 0; j < M; ++j)
 		{
-			const double Cur = At(Mask, j);
-			if (!(Mask & (1 << j)) || Cur == OpsInf)
+			const Real Cur = At(Mask, j);
+			if (!(Mask & (1 << j)) || Cur == OpsInf())
 			{
 				continue;
 			}
@@ -1511,15 +1513,15 @@ Result TspFn(const Call& C)
 				{
 					continue;
 				}
-				double& Nx = At(Mask | (1 << k), k);
-				Nx = std::min(Nx, Cur + D(j + 1, k + 1));
+				Real& Nx = At(Mask | (1 << k), k);
+				Nx = gm::min(Nx, Cur + D(j + 1, k + 1));
 			}
 		}
 	}
-	double Best = OpsInf;
+	Real Best = OpsInf();
 	for (int j = 0; j < M; ++j)
 	{
-		Best = std::min(Best, At(Full, j) + D(j + 1, 0));
+		Best = gm::min(Best, At(Full, j) + D(j + 1, 0));
 	}
 	return Result::Of(Best);
 }
@@ -1534,7 +1536,7 @@ std::vector<std::pair<int, int>> OpsPrim(const Matrix& D, const std::vector<int>
 	while (InT.size() < Nodes.size())
 	{
 		bool Have = false;
-		double Bw = 0.0;
+		Real Bw = 0.0;
 		int Bu = 0, Bv = 0;
 		for (int U : InT)
 		{
@@ -1544,7 +1546,7 @@ std::vector<std::pair<int, int>> OpsPrim(const Matrix& D, const std::vector<int>
 				{
 					continue;
 				}
-				const double W = D(U, V);
+				const Real W = D(U, V);
 				if (!Have || W < Bw || (W == Bw && (U < Bu || (U == Bu && V < Bv))))
 				{
 					Have = true;
@@ -1563,11 +1565,11 @@ std::vector<std::pair<int, int>> OpsPrim(const Matrix& D, const std::vector<int>
 
 struct OpsOneTree
 {
-	double Val = 0.0;
+	Real Val = 0.0;
 	std::vector<int> Deg;
 };
 
-OpsOneTree OpsMakeOneTree(const Matrix& D, const std::vector<double>& Pi)
+OpsOneTree OpsMakeOneTree(const Matrix& D, const std::vector<Real>& Pi)
 {
 	const int N = D.Rows;
 	Matrix Dp(N, N);
@@ -1583,7 +1585,7 @@ OpsOneTree OpsMakeOneTree(const Matrix& D, const std::vector<double>& Pi)
 	const std::vector<std::pair<int, int>> T = OpsPrim(Dp, Rest);
 	OpsOneTree O;
 	O.Deg.assign(static_cast<size_t>(N), 0);
-	double Sum = 0.0;
+	Real Sum = 0.0;
 	for (const auto& Ed : T)
 	{
 		++O.Deg[static_cast<size_t>(Ed.first)];
@@ -1592,8 +1594,8 @@ OpsOneTree OpsMakeOneTree(const Matrix& D, const std::vector<double>& Pi)
 	}
 	std::vector<int> Two = Rest;
 	std::sort(Two.begin(), Two.end(), [&Dp](int P, int Q) { return Dp(0, P) < Dp(0, Q) || (Dp(0, P) == Dp(0, Q) && P < Q); });
-	double PiSum = 0.0;
-	for (double P : Pi)
+	Real PiSum = 0.0;
+	for (Real P : Pi)
 	{
 		PiSum += P;
 	}
@@ -1636,13 +1638,13 @@ Result HkBoundFn(const Call& C)
 		return Result::Fail("iterations must be a whole number 1..2000");
 	}
 	const int N = D.Rows;
-	std::vector<double> Pi(static_cast<size_t>(N), 0.0);
-	const double L0 = OpsMakeOneTree(D, Pi).Val;
-	double Best = -OpsInf, Step = 0.1 * L0 / N;
+	std::vector<Real> Pi(static_cast<size_t>(N), 0.0);
+	const Real L0 = OpsMakeOneTree(D, Pi).Val;
+	Real Best = -OpsInf(), Step = 0.1 * L0 / N;
 	for (int k = 0; k < Iters; ++k)
 	{
 		const OpsOneTree O = OpsMakeOneTree(D, Pi);
-		Best = std::max(Best, O.Val);
+		Best = gm::max(Best, O.Val);
 		bool AllTwo = true;
 		for (int Dg : O.Deg)
 		{
@@ -1662,7 +1664,7 @@ Result HkBoundFn(const Call& C)
 }
 
 // Exact minimum-weight perfect matching by recursion on the first stop (logistics.js mwpm).
-double OpsMwpm(const Matrix& D, const std::vector<int>& Odd, std::vector<std::pair<int, int>>* Match)
+Real OpsMwpm(const Matrix& D, const std::vector<int>& Odd, std::vector<std::pair<int, int>>* Match)
 {
 	Match->clear();
 	if (Odd.empty())
@@ -1670,13 +1672,13 @@ double OpsMwpm(const Matrix& D, const std::vector<int>& Odd, std::vector<std::pa
 		return 0.0;
 	}
 	const int A = Odd[0];
-	double Best = OpsInf;
+	Real Best = OpsInf();
 	for (size_t k = 1; k < Odd.size(); ++k)
 	{
 		std::vector<int> Rest(Odd.begin() + 1, Odd.begin() + static_cast<std::ptrdiff_t>(k));
 		Rest.insert(Rest.end(), Odd.begin() + static_cast<std::ptrdiff_t>(k + 1), Odd.end());
 		std::vector<std::pair<int, int>> Sub;
-		const double R = OpsMwpm(D, Rest, &Sub);
+		const Real R = OpsMwpm(D, Rest, &Sub);
 		if (D(A, Odd[k]) + R < Best - 1e-15)
 		{
 			Best = D(A, Odd[k]) + R;
@@ -1739,7 +1741,7 @@ Result ChristofidesFn(const Call& C)
 	std::iota(All.begin(), All.end(), 0);
 	const std::vector<std::pair<int, int>> T = OpsPrim(D, All);
 	std::vector<int> Deg(static_cast<size_t>(N), 0), Odd;
-	double Mst = 0.0;
+	Real Mst = 0.0;
 	for (const auto& Ed : T)
 	{
 		++Deg[static_cast<size_t>(Ed.first)];
@@ -1754,7 +1756,7 @@ Result ChristofidesFn(const Call& C)
 		}
 	}
 	std::vector<std::pair<int, int>> Match;
-	const double MatchCost = OpsMwpm(D, Odd, &Match);
+	const Real MatchCost = OpsMwpm(D, Odd, &Match);
 	std::vector<std::pair<int, int>> Multi = T;
 	Multi.insert(Multi.end(), Match.begin(), Match.end());
 	std::vector<int> Seen;
@@ -1803,7 +1805,7 @@ Result DijkstraFn(const Call& C)
 			}
 		}
 	}
-	std::vector<double> D(static_cast<size_t>(N), OpsInf);
+	std::vector<Real> D(static_cast<size_t>(N), OpsInf());
 	std::vector<char> Done(static_cast<size_t>(N), 0);
 	D[static_cast<size_t>(S)] = 0.0;
 	for (int Round = 0; Round < N; ++Round)
@@ -1811,7 +1813,7 @@ Result DijkstraFn(const Call& C)
 		int U = -1;
 		for (int i = 0; i < N; ++i)
 		{
-			if (!Done[static_cast<size_t>(i)] && D[static_cast<size_t>(i)] < OpsInf && (U < 0 || D[static_cast<size_t>(i)] < D[static_cast<size_t>(U)]))
+			if (!Done[static_cast<size_t>(i)] && D[static_cast<size_t>(i)] < OpsInf() && (U < 0 || D[static_cast<size_t>(i)] < D[static_cast<size_t>(U)]))
 			{
 				U = i;
 			}
@@ -1846,7 +1848,7 @@ Result BellmanFn(const Call& C)
 	{
 		return Result::Fail("source must be a node 1..n");
 	}
-	std::vector<double> D(static_cast<size_t>(N), OpsInf);
+	std::vector<Real> D(static_cast<size_t>(N), OpsInf());
 	D[static_cast<size_t>(S)] = 0.0;
 	for (int Round = 0; Round < N; ++Round)
 	{
@@ -1855,7 +1857,7 @@ Result BellmanFn(const Call& C)
 		{
 			for (int v = 0; v < N; ++v)
 			{
-				if (u != v && std::isfinite(W(u, v)) && D[static_cast<size_t>(u)] + W(u, v) < D[static_cast<size_t>(v)])
+				if (u != v && gm::isfinite(W(u, v)) && D[static_cast<size_t>(u)] + W(u, v) < D[static_cast<size_t>(v)])
 				{
 					D[static_cast<size_t>(v)] = D[static_cast<size_t>(u)] + W(u, v);
 					Changed = true;
@@ -1907,18 +1909,18 @@ Result FloydFn(const Call& C)
 	return Result::Of(D);
 }
 
-double OpsOctile(double Dx, double Dy)
+Real OpsOctile(Real Dx, Real Dy)
 {
-	const double A = std::fabs(Dx), B = std::fabs(Dy);
-	return std::max(A, B) + (std::sqrt(2.0) - 1.0) * std::min(A, B);
+	const Real A = gm::fabs(Dx), B = gm::fabs(Dy);
+	return gm::max(A, B) + (gm::sqrt(2.0) - 1.0) * gm::min(A, B);
 }
 
 Result OctileFn(const Call& C) { return Result::Of(OpsOctile(C.N(0), C.N(1))); }
-Result GridRatioFn(const Call& C) { return Result::Of(OpsOctile(std::cos(C.N(0)), std::sin(C.N(0)))); }
+Result GridRatioFn(const Call& C) { return Result::Of(OpsOctile(gm::cos(C.N(0)), gm::sin(C.N(0)))); }
 Result GridBoundFn(const Call& C)
 {
 	(void)C;
-	return Result::Of(1.0 / std::cos(cst::Pi / 8.0));
+	return Result::Of(1.0 / gm::cos(cst::Pi() / 8.0));
 }
 
 Result LapFn(const Call& C)
@@ -1931,7 +1933,7 @@ Result LapFn(const Call& C)
 	return Result::Of(OpsLaplacian(A));
 }
 
-bool OpsSpectrum(const Matrix& A, std::vector<double>* W, Matrix* V, std::string* Error)
+bool OpsSpectrum(const Matrix& A, std::vector<Real>* W, Matrix* V, std::string* Error)
 {
 	if (!OpsAdjacency(A, Error))
 	{
@@ -1947,7 +1949,7 @@ bool OpsSpectrum(const Matrix& A, std::vector<double>* W, Matrix* V, std::string
 
 Result Lambda2Fn(const Call& C)
 {
-	std::vector<double> W;
+	std::vector<Real> W;
 	std::string E;
 	if (!OpsSpectrum(C.M(0), &W, nullptr, &E))
 	{
@@ -1960,8 +1962,8 @@ Result Lambda2Fn(const Call& C)
 Result ConsensusFn(const Call& C)
 {
 	const Matrix &A = C.M(0), &X0 = C.M(1);
-	const double T = C.N(2);
-	std::vector<double> W;
+	const Real T = C.N(2);
+	std::vector<Real> W;
 	Matrix V;
 	std::string E;
 	if (!OpsSpectrum(A, &W, &V, &E))
@@ -1977,36 +1979,36 @@ Result ConsensusFn(const Call& C)
 	{
 		return Result::Fail("time t must be >= 0");
 	}
-	std::vector<double> Coef(static_cast<size_t>(N), 0.0), Xt(static_cast<size_t>(N), 0.0);
+	std::vector<Real> Coef(static_cast<size_t>(N), 0.0), Xt(static_cast<size_t>(N), 0.0);
 	for (int k = 0; k < N; ++k)
 	{
-		double S = 0.0;
+		Real S = 0.0;
 		for (int i = 0; i < N; ++i)
 		{
 			S += V(i, k) * X0.V[static_cast<size_t>(i)];
 		}
-		Coef[static_cast<size_t>(k)] = S * std::exp(-W[static_cast<size_t>(k)] * T);
+		Coef[static_cast<size_t>(k)] = S * gm::exp(-W[static_cast<size_t>(k)] * T);
 	}
 	for (int i = 0; i < N; ++i)
 	{
-		double S = 0.0;
+		Real S = 0.0;
 		for (int k = 0; k < N; ++k)
 		{
 			S += V(i, k) * Coef[static_cast<size_t>(k)];
 		}
 		Xt[static_cast<size_t>(i)] = S;
 	}
-	auto Spread = [N](const std::vector<double>& X) {
-		const double M = std::accumulate(X.begin(), X.end(), 0.0) / N;
-		double S = 0.0;
-		for (double Xi : X)
+	auto Spread = [N](const std::vector<Real>& X) {
+		const Real M = std::accumulate(X.begin(), X.end(), Real(0)) / N;
+		Real S = 0.0;
+		for (Real Xi : X)
 		{
 			S += (Xi - M) * (Xi - M);
 		}
-		return std::sqrt(S);
+		return gm::sqrt(S);
 	};
-	const double Mean = std::accumulate(X0.V.begin(), X0.V.end(), 0.0) / N;
-	return Result::Record({{"dis", Spread(Xt)}, {"bound", std::exp(-W[1] * T) * Spread(X0.V)}, {"mean", Mean}});
+	const Real Mean = std::accumulate(X0.V.begin(), X0.V.end(), Real(0)) / N;
+	return Result::Record({{"dis", Spread(Xt)}, {"bound", gm::exp(-W[1] * T) * Spread(X0.V)}, {"mean", Mean}});
 }
 
 // R_uv: ground v, inject one unit at u, read the voltage at u.
@@ -2053,7 +2055,7 @@ Result SpanTreesFn(const Call& C)
 	{
 		return Result::Of(1.0);
 	}
-	double D = 0.0;
+	Real D = 0.0;
 	if (!la::Determinant(OpsDropRowCol(OpsLaplacian(A), 0), &D, &E))
 	{
 		return Result::Of(0.0);
@@ -2063,75 +2065,76 @@ Result SpanTreesFn(const Call& C)
 
 /* ---------- SLAM bench ---------- */
 // slam.js lgamma (Lanczos, 6 terms) and gammp (series below a + 1, continued fraction above).
-double OpsLgamma(double X)
+Real OpsLgamma(Real X)
 {
-	static const double Cf[] = {76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5};
-	double Y = X, T = X + 5.5;
-	T -= (X + 0.5) * std::log(T);
-	double S = 1.000000000190015;
-	for (double Ci : Cf)
+	static const Real Cf[] = {76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5};
+	Real Y = X, T = X + 5.5;
+	T -= (X + 0.5) * gm::log(T);
+	Real S = 1.000000000190015;
+	for (Real Ci : Cf)
 	{
-		S += Ci / ++Y;
+		Y += 1;
+		S += Ci / Y;
 	}
-	return -T + std::log(2.5066282746310005 * S / X);
+	return -T + gm::log(2.5066282746310005 * S / X);
 }
 
-double OpsGammp(double A, double X)
+Real OpsGammp(Real A, Real X)
 {
 	if (X <= 0)
 	{
 		return 0.0;
 	}
-	const double Gl = OpsLgamma(A);
+	const Real Gl = OpsLgamma(A);
 	if (X < A + 1)
 	{
-		double Ap = A, Del = 1.0 / A, Sum = Del;
+		Real Ap = A, Del = 1.0 / A, Sum = Del;
 		for (int n = 0; n < 1000; ++n)
 		{
 			Ap += 1.0;
 			Del *= X / Ap;
 			Sum += Del;
-			if (std::fabs(Del) < std::fabs(Sum) * 1e-16)
+			if (gm::fabs(Del) < gm::fabs(Sum) * 1e-16)
 			{
 				break;
 			}
 		}
-		return Sum * std::exp(-X + A * std::log(X) - Gl);
+		return Sum * gm::exp(-X + A * gm::log(X) - Gl);
 	}
-	double B = X + 1 - A, Cc = 1e300, D = 1.0 / B, H = D;
+	Real B = X + 1 - A, Cc = 1e300, D = 1.0 / B, H = D;
 	for (int i = 1; i < 1000; ++i)
 	{
-		const double An = -i * (i - A);
+		const Real An = -i * (i - A);
 		B += 2;
 		D = An * D + B;
-		if (std::fabs(D) < 1e-300)
+		if (gm::fabs(D) < 1e-300)
 		{
 			D = 1e-300;
 		}
 		Cc = B + An / Cc;
-		if (std::fabs(Cc) < 1e-300)
+		if (gm::fabs(Cc) < 1e-300)
 		{
 			Cc = 1e-300;
 		}
 		D = 1.0 / D;
-		const double Del = D * Cc;
+		const Real Del = D * Cc;
 		H *= Del;
-		if (std::fabs(Del - 1) < 1e-16)
+		if (gm::fabs(Del - 1) < 1e-16)
 		{
 			break;
 		}
 	}
-	return 1.0 - std::exp(-X + A * std::log(X) - Gl) * H;
+	return 1.0 - gm::exp(-X + A * gm::log(X) - Gl) * H;
 }
 
-double OpsChi2Cdf(double X, double K) { return OpsGammp(K / 2.0, X / 2.0); }
+Real OpsChi2Cdf(Real X, Real K) { return OpsGammp(K / 2.0, X / 2.0); }
 
-double OpsChi2Inv(double P, double K)
+Real OpsChi2Inv(Real P, Real K)
 {
-	double Lo = 0.0, Hi = K + 40.0 * std::sqrt(2.0 * K) + 40.0;
+	Real Lo = 0.0, Hi = K + 40.0 * gm::sqrt(2.0 * K) + 40.0;
 	for (int i = 0; i < 200; ++i)
 	{
-		const double M = (Lo + Hi) / 2.0;
+		const Real M = (Lo + Hi) / 2.0;
 		if (OpsChi2Cdf(M, K) < P)
 		{
 			Lo = M;
@@ -2164,7 +2167,7 @@ Result Chi2CdfFn(const Call& C)
 
 Result Chi2InvFn(const Call& C)
 {
-	const double P = C.N(0), K = C.N(1);
+	const Real P = C.N(0), K = C.N(1);
 	if (!(P >= 0 && P < 1))
 	{
 		return Result::Fail("probability p must be in [0, 1)");
@@ -2178,7 +2181,7 @@ Result Chi2InvFn(const Call& C)
 
 Result Chi2GateFn(const Call& C)
 {
-	const double P = C.N(0), K = C.N(1);
+	const Real P = C.N(0), K = C.N(1);
 	if (!(P >= 0 && P < 1))
 	{
 		return Result::Fail("probability p must be in [0, 1)");
@@ -2187,7 +2190,7 @@ Result Chi2GateFn(const Call& C)
 	{
 		return Result::Fail("degrees of freedom k must be in (0, 1e6]");
 	}
-	return Result::Of(K == 2.0 ? -2.0 * std::log(1.0 - P) : OpsChi2Inv(P, K));
+	return Result::Of(K == 2.0 ? -2.0 * gm::log(1.0 - P) : OpsChi2Inv(P, K));
 }
 
 Result MahalFn(const Call& C)
@@ -2203,7 +2206,7 @@ Result MahalFn(const Call& C)
 	{
 		return Result::Fail("covariance is singular");
 	}
-	double D2 = 0.0;
+	Real D2 = 0.0;
 	for (size_t i = 0; i < Nu.V.size(); ++i)
 	{
 		D2 += Nu.V[i] * X.V[i];
@@ -2214,7 +2217,7 @@ Result MahalFn(const Call& C)
 // slam.js svd2, mm2, tr2, det2 and kabsch, operation for operation.
 struct OpsM2
 {
-	double A[2][2];
+	Real A[2][2];
 };
 
 OpsM2 OpsMm2(const OpsM2& X, const OpsM2& Y)
@@ -2230,17 +2233,17 @@ OpsM2 OpsMm2(const OpsM2& X, const OpsM2& Y)
 	return R;
 }
 OpsM2 OpsTr2(const OpsM2& X) { return OpsM2{{{X.A[0][0], X.A[1][0]}, {X.A[0][1], X.A[1][1]}}}; }
-double OpsDet2(const OpsM2& M) { return M.A[0][0] * M.A[1][1] - M.A[0][1] * M.A[1][0]; }
+Real OpsDet2(const OpsM2& M) { return M.A[0][0] * M.A[1][1] - M.A[0][1] * M.A[1][0]; }
 
 void OpsSvd2(const OpsM2& Mt, OpsM2* U, OpsM2* V)
 {
-	const double(&M)[2][2] = Mt.A;
-	const double P = M[0][0] * M[0][0] + M[1][0] * M[1][0], Q = M[0][0] * M[0][1] + M[1][0] * M[1][1], W = M[0][1] * M[0][1] + M[1][1] * M[1][1];
-	const double Ang = 0.5 * std::atan2(2 * Q, P - W), C = std::cos(Ang), S = std::sin(Ang);
+	const Real(&M)[2][2] = Mt.A;
+	const Real P = M[0][0] * M[0][0] + M[1][0] * M[1][0], Q = M[0][0] * M[0][1] + M[1][0] * M[1][1], W = M[0][1] * M[0][1] + M[1][1] * M[1][1];
+	const Real Ang = 0.5 * gm::atan2(2 * Q, P - W), C = gm::cos(Ang), S = gm::sin(Ang);
 	*V = OpsM2{{{C, -S}, {S, C}}};
-	const double Rad = std::hypot((P - W) / 2, Q), L1 = (P + W) / 2 + Rad, L2 = std::max(0.0, (P + W) / 2 - Rad), S1 = std::sqrt(L1), S2 = std::sqrt(L2);
-	const double Mv1[2] = {M[0][0] * C + M[0][1] * S, M[1][0] * C + M[1][1] * S}, Mv2[2] = {-M[0][0] * S + M[0][1] * C, -M[1][0] * S + M[1][1] * C};
-	double U1[2] = {1, 0}, U2[2];
+	const Real Rad = gm::hypot((P - W) / 2, Q), L1 = (P + W) / 2 + Rad, L2 = gm::max(Real(0), (P + W) / 2 - Rad), S1 = gm::sqrt(L1), S2 = gm::sqrt(L2);
+	const Real Mv1[2] = {M[0][0] * C + M[0][1] * S, M[1][0] * C + M[1][1] * S}, Mv2[2] = {-M[0][0] * S + M[0][1] * C, -M[1][0] * S + M[1][1] * C};
+	Real U1[2] = {1, 0}, U2[2];
 	if (S1 > 0)
 	{
 		U1[0] = Mv1[0] / S1;
@@ -2256,7 +2259,7 @@ void OpsSvd2(const OpsM2& Mt, OpsM2* U, OpsM2* V)
 		U2[0] = -U1[1];
 		U2[1] = U1[0];
 	}
-	const double Nn = std::hypot(U2[0], U2[1]);
+	const Real Nn = gm::hypot(U2[0], U2[1]);
 	U2[0] /= Nn;
 	U2[1] /= Nn;
 	*U = OpsM2{{{U1[0], U2[0]}, {U1[1], U2[1]}}};
@@ -2264,14 +2267,14 @@ void OpsSvd2(const OpsM2& Mt, OpsM2* U, OpsM2* V)
 
 struct OpsAlign
 {
-	double Th = 0.0, Tx = 0.0, Ty = 0.0, S = 0.0;
+	Real Th = 0.0, Tx = 0.0, Ty = 0.0, S = 0.0;
 };
 
 // R, t minimizing sum |Q_i - (R P_i + t)|^2, with Umeyama's reflection guard.
 OpsAlign OpsKabsch(const Matrix& P, const Matrix& Q)
 {
 	const int N = P.Rows;
-	double Pm[2] = {0, 0}, Qm[2] = {0, 0};
+	Real Pm[2] = {0, 0}, Qm[2] = {0, 0};
 	for (int i = 0; i < N; ++i)
 	{
 		Pm[0] += P(i, 0) / N;
@@ -2280,10 +2283,10 @@ OpsAlign OpsKabsch(const Matrix& P, const Matrix& Q)
 		Qm[1] += Q(i, 1) / N;
 	}
 	OpsM2 H{{{0, 0}, {0, 0}}};
-	double S = 0.0;
+	Real S = 0.0;
 	for (int i = 0; i < N; ++i)
 	{
-		const double A0 = P(i, 0) - Pm[0], A1 = P(i, 1) - Pm[1], B0 = Q(i, 0) - Qm[0], B1 = Q(i, 1) - Qm[1];
+		const Real A0 = P(i, 0) - Pm[0], A1 = P(i, 1) - Pm[1], B0 = Q(i, 0) - Qm[0], B1 = Q(i, 1) - Qm[1];
 		H.A[0][0] += A0 * B0;
 		H.A[0][1] += A0 * B1;
 		H.A[1][0] += A1 * B0;
@@ -2292,13 +2295,13 @@ OpsAlign OpsKabsch(const Matrix& P, const Matrix& Q)
 	}
 	OpsM2 U, V;
 	OpsSvd2(H, &U, &V);
-	const double Dt = OpsDet2(OpsMm2(V, OpsTr2(U)));
-	const double D = Dt > 0 ? 1.0 : (Dt < 0 ? -1.0 : 1.0);
+	const Real Dt = OpsDet2(OpsMm2(V, OpsTr2(U)));
+	const Real D = Dt > 0 ? 1.0 : (Dt < 0 ? -1.0 : 1.0);
 	const OpsM2 R = OpsMm2(OpsMm2(V, OpsM2{{{1, 0}, {0, D}}}), OpsTr2(U));
 	OpsAlign Out;
 	Out.Tx = Qm[0] - R.A[0][0] * Pm[0] - R.A[0][1] * Pm[1];
 	Out.Ty = Qm[1] - R.A[1][0] * Pm[0] - R.A[1][1] * Pm[1];
-	Out.Th = std::atan2(R.A[1][0], R.A[0][0]);
+	Out.Th = gm::atan2(R.A[1][0], R.A[0][0]);
 	Out.S = S;
 	return Out;
 }
@@ -2315,11 +2318,11 @@ Result KabschFn(const Call& C)
 		return Result::Fail("points must be finite");
 	}
 	const OpsAlign K = OpsKabsch(P, Q);
-	const double Cs = std::cos(K.Th), Sn = std::sin(K.Th);
-	double Cost = 0.0;
+	const Real Cs = gm::cos(K.Th), Sn = gm::sin(K.Th);
+	Real Cost = 0.0;
 	for (int i = 0; i < P.Rows; ++i)
 	{
-		const double Ex = Cs * P(i, 0) - Sn * P(i, 1) + K.Tx - Q(i, 0), Ey = Sn * P(i, 0) + Cs * P(i, 1) + K.Ty - Q(i, 1);
+		const Real Ex = Cs * P(i, 0) - Sn * P(i, 1) + K.Tx - Q(i, 0), Ey = Sn * P(i, 0) + Cs * P(i, 1) + K.Ty - Q(i, 1);
 		Cost += Ex * Ex + Ey * Ey;
 	}
 	return Result::Record({{"th", K.Th}, {"tx", K.Tx}, {"ty", K.Ty}, {"cost", Cost}, {"S", K.S}});
@@ -2336,13 +2339,13 @@ Result HeadVarFn(const Call& C)
 
 Result DriftFn(const Call& C)
 {
-	const double Sig = C.N(0), S = C.N(1), N = C.N(2);
+	const Real Sig = C.N(0), S = C.N(1), N = C.N(2);
 	if (!(S > 0 && N >= 0))
 	{
 		return Result::Fail("needs spread S > 0 and frames N >= 0");
 	}
-	const double Var = N * 2.0 * Sig * Sig / S;
-	return Result::Record({{"var", Var}, {"rms", std::sqrt(Var)}});
+	const Real Var = N * 2.0 * Sig * Sig / S;
+	return Result::Record({{"var", Var}, {"rms", gm::sqrt(Var)}});
 }
 
 // mulberry32 with Box-Muller, cos first then sin (slam.js rng).
@@ -2350,39 +2353,41 @@ struct OpsRng
 {
 	uint32_t A;
 	bool HasSpare = false;
-	double Spare = 0.0;
+	Real Spare = 0.0;
 
 	explicit OpsRng(uint32_t Seed) : A(Seed) {}
-	double U()
+	Real U()
 	{
 		A += 0x6D2B79F5u;
 		uint32_t T = (A ^ (A >> 15)) * (1u | A);
 		T = (T + ((T ^ (T >> 7)) * (61u | T))) ^ T;
-		return static_cast<double>(T ^ (T >> 14)) / 4294967296.0;
+		static const Real Two32 = Real(4294967296ull);
+		return Real(T ^ (T >> 14)) / Two32;
 	}
-	double G()
+	Real G()
 	{
 		if (HasSpare)
 		{
 			HasSpare = false;
 			return Spare;
 		}
-		const double U1 = U(), U2 = U(), Rr = std::sqrt(-2.0 * std::log(1.0 - U1)), Th = 2.0 * cst::Pi * U2;
-		Spare = Rr * std::sin(Th);
+		static const Real TwoPi = Real(2) * cst::Pi();
+		const Real U1 = U(), U2 = U(), Rr = gm::sqrt(Real(-2) * gm::log(Real(1) - U1)), Th = TwoPi * U2;
+		Spare = Rr * gm::sin(Th);
 		HasSpare = true;
-		return Rr * std::cos(Th);
+		return Rr * gm::cos(Th);
 	}
 };
 
 // One frame pair of the downward camera (slam.js pairFit): f = 500 px, h = 2 m, 640 x 480, 0.25 m forward.
-OpsAlign OpsPairFit(OpsRng& R, int N, double Sm, double C, double S)
+OpsAlign OpsPairFit(OpsRng& R, int N, Real Sm, Real C, Real S)
 {
-	const double Wm = 640.0 * 2.0 / 500.0, Hm = 480.0 * 2.0 / 500.0, Fwd = 0.25;
-	double Pa0 = 0, Pa1 = 0, Pb0 = 0, Pb1 = 0, H00 = 0, H01 = 0, H10 = 0, H11 = 0, Bb = 0;
+	static const Real Wm = Real(640) * Real(2) / Real(500), Hm = Real(480) * Real(2) / Real(500), Fwd = 0.25, Half = 0.5;
+	Real Pa0 = 0, Pa1 = 0, Pb0 = 0, Pb1 = 0, H00 = 0, H01 = 0, H10 = 0, H11 = 0, Bb = 0;
 	for (int i = 0; i < N; ++i)
 	{
-		const double Ax = (R.U() - 0.5) * Wm, Ay = (R.U() - 0.5) * Hm, Dx = Ax - Fwd, Bx = C * Dx + S * Ay, By = -S * Dx + C * Ay;
-		const double A0 = Ax + Sm * R.G(), A1 = Ay + Sm * R.G(), B0 = Bx + Sm * R.G(), B1 = By + Sm * R.G();
+		const Real Ax = (R.U() - Half) * Wm, Ay = (R.U() - Half) * Hm, Dx = Ax - Fwd, Bx = C * Dx + S * Ay, By = -S * Dx + C * Ay;
+		const Real A0 = Ax + Sm * R.G(), A1 = Ay + Sm * R.G(), B0 = Bx + Sm * R.G(), B1 = By + Sm * R.G();
 		Pa0 += A0;
 		Pa1 += A1;
 		Pb0 += B0;
@@ -2400,11 +2405,11 @@ OpsAlign OpsPairFit(OpsRng& R, int N, double Sm, double C, double S)
 	const OpsM2 H{{{H00 - N * Pb0 * Pa0, H01 - N * Pb0 * Pa1}, {H10 - N * Pb1 * Pa0, H11 - N * Pb1 * Pa1}}};
 	OpsM2 U, V;
 	OpsSvd2(H, &U, &V);
-	const double Dt = OpsDet2(OpsMm2(V, OpsTr2(U)));
-	const double D = Dt > 0 ? 1.0 : (Dt < 0 ? -1.0 : 1.0);
+	const Real Dt = OpsDet2(OpsMm2(V, OpsTr2(U)));
+	const Real D = Dt > 0 ? 1.0 : (Dt < 0 ? -1.0 : 1.0);
 	const OpsM2 Rm = OpsMm2(OpsMm2(V, OpsM2{{{1, 0}, {0, D}}}), OpsTr2(U));
 	OpsAlign Out;
-	Out.Th = std::atan2(Rm.A[1][0], Rm.A[0][0]);
+	Out.Th = gm::atan2(Rm.A[1][0], Rm.A[0][0]);
 	Out.Tx = Pa0 - Rm.A[0][0] * Pb0 - Rm.A[0][1] * Pb1;
 	Out.Ty = Pa1 - Rm.A[1][0] * Pb0 - Rm.A[1][1] * Pb1;
 	Out.S = Bb - N * (Pb0 * Pb0 + Pb1 * Pb1);
@@ -2419,39 +2424,39 @@ Result VoWalkFn(const Call& C)
 	{
 		return Result::Fail("needs whole N 1..1000, n 2..200, M 1..2000 and seed >= 0");
 	}
-	if (static_cast<double>(N) * Nf * M > 4e5)
+	if (static_cast<long long>(N) * Nf * M > 40000)
 	{
-		return Result::Fail("N * n * M must be at most 4e5, the bench's size (keep it quick)");
+		return Result::Fail("N * n * M must be at most 40000 on the gears (about 2 s); the bench runs M = 200");
 	}
-	const double Sm = C.N(2) * 2.0 / 500.0, Th = C.N(3) * cst::Pi / 180.0, C0 = std::cos(Th), S0 = std::sin(Th), Fwd = 0.25;
-	double Sh = 0.0, Sp = 0.0, Sv = 0.0;
+	const Real Sm = C.N(2) * Real(2) / Real(500), Th = C.N(3) * (cst::Pi() / Real(180)), C0 = gm::cos(Th), S0 = gm::sin(Th), Fwd = 0.25, Two = 2;
+	Real Sh = 0.0, Sp = 0.0, Sv = 0.0;
 	for (int m = 0; m < M; ++m)
 	{
 		OpsRng R(static_cast<uint32_t>(Seed) + static_cast<uint32_t>(m) * 0x9E3779B9u);
-		double X = 0, Y = 0, Hd = 0, Xt = 0, Yt = 0, Ph = 0, V = 0, Eh = 0;
+		Real X = 0, Y = 0, Hd = 0, Xt = 0, Yt = 0, Ph = 0, V = 0, Eh = 0;
 		for (int k = 0; k < N; ++k)
 		{
 			const OpsAlign K = OpsPairFit(R, Nf, Sm, C0, S0);
-			const double Ch = std::cos(Hd), Sn = std::sin(Hd);
+			const Real Ch = gm::cos(Hd), Sn = gm::sin(Hd);
 			X += Ch * K.Tx - Sn * K.Ty;
 			Y += Sn * K.Tx + Ch * K.Ty;
 			Hd += K.Th;
-			Xt += std::cos(Ph) * Fwd;
-			Yt += std::sin(Ph) * Fwd;
+			Xt += gm::cos(Ph) * Fwd;
+			Yt += gm::sin(Ph) * Fwd;
 			Ph += Th;
-			V += 2.0 * Sm * Sm / K.S;
+			V += Two * Sm * Sm / K.S;
 			Eh = Hd - Ph;
 		}
 		Sh += Eh * Eh / M;
 		Sp += ((X - Xt) * (X - Xt) + (Y - Yt) * (Y - Yt)) / M;
 		Sv += V / M;
 	}
-	return Result::Record({{"rmsh", std::sqrt(Sh)}, {"pred", std::sqrt(Sv)}, {"rmsp", std::sqrt(Sp)}});
+	return Result::Record({{"rmsh", gm::sqrt(Sh)}, {"pred", gm::sqrt(Sv)}, {"rmsp", gm::sqrt(Sp)}});
 }
 
 Result NeesBandFn(const Call& C)
 {
-	const double M = C.N(0), K = C.N(1), P = C.N(2);
+	const Real M = C.N(0), K = C.N(1), P = C.N(2);
 	if (!(M >= 1 && K > 0 && M * K <= 1e6))
 	{
 		return Result::Fail("needs runs M >= 1, dimension k > 0, M k <= 1e6");
@@ -2460,7 +2465,7 @@ Result NeesBandFn(const Call& C)
 	{
 		return Result::Fail("confidence p must be in (0, 1)");
 	}
-	const double Lo = P == 0.95 ? 0.025 : (1.0 - P) / 2.0, Hi = P == 0.95 ? 0.975 : (1.0 + P) / 2.0;
+	const Real Lo = P == 0.95 ? 0.025 : (1.0 - P) / 2.0, Hi = P == 0.95 ? 0.975 : (1.0 + P) / 2.0;
 	return Result::Record({{"lo", OpsChi2Inv(Lo, K * M) / M}, {"hi", OpsChi2Inv(Hi, K * M) / M}});
 }
 } // namespace ops_detail
@@ -2557,7 +2562,7 @@ void RegisterOpsLibrary(Registry& R)
 	Def(R, "headvar", Sl, "slam/ §1 headingVar", "first-order heading variance of one fit, 2 sigma^2 / S", "rad^2", {Num("sigma", "m"), Num("S", "m^2")}, &HeadVarFn);
 	Def(R, "drift", Sl, "slam/ §2 drift, sqrt(N) law", "heading drift after N chained frames: variance N 2 sigma^2 / S and its RMS", "record var (rad^2), rms (rad)",
 		{Num("sigma", "m"), Num("S", "m^2"), Num("N", "frames")}, &DriftFn);
-	Def(R, "vowalk", Sl, "slam/ §2 voWalk", "Monte Carlo of chained visual odometry (the bench's seeded generator), at frame N", "record rmsh (rad), pred (rad), rmsp (m)",
-		{Num("N", "frames", 100), Num("n", "features", 20), Num("sig", "px", 1), Num("yaw", "deg/frame", 3), Num("M", "runs", 200), Num("seed", "-", 2)}, &VoWalkFn);
+	Def(R, "vowalk", Sl, "slam/ §2 voWalk", "Monte Carlo of chained visual odometry (the bench's seeded generator), at frame N; N n M <= 40000 (bench M = 200 is too slow on the gears)", "record rmsh (rad), pred (rad), rmsp (m)",
+		{Num("N", "frames", 100), Num("n", "features", 20), Num("sig", "px", 1), Num("yaw", "deg/frame", 3), Num("M", "runs", 5), Num("seed", "-", 2)}, &VoWalkFn);
 }
 } // namespace mcalc

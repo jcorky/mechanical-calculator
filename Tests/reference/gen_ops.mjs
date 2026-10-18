@@ -325,12 +325,15 @@ emit("drift(0.004, 2.5, 400).rms / drift(0.004, 2.5, 100).rms", 2, null, "sqrt(4
 emit("headvar(0.004, 2.5)", S.headingVar(0.004, 2.5), null, "slam.js headingVar");
 err("drift(0.004, 0, 10)", "S = 0");
 P = "slam.js voWalk (mulberry32 + Box-Muller, bit for bit)";
-for (const [N, n, sig, yaw, M, seed] of [[100, 20, 1, 3, 200, 2], [30, 10, 0.5, 3, 50, 7], [12, 6, 2, -4, 40, 9]]) {
+// On the gears the bench's 200 runs take ~18 s, so the calculator caps N n M at 40000 and defaults to M = 5.
+for (const [N, n, sig, yaw, M, seed] of [[100, 20, 1, 3, 5, 2], [30, 10, 0.5, 3, 50, 7], [12, 6, 2, -4, 40, 9]]) {
   const W = S.voWalk(seed, M, N, n, sig, yaw), a = `vowalk(${N}, ${n}, ${sig}, ${yaw}, ${M}, ${seed})`;
-  emit(`${a}.rmsh`, W.rmsH[N - 1], "rel:1e-7", P + (seed === 2 ? " bench defaults" : ""));
+  emit(`${a}.rmsh`, W.rmsH[N - 1], "rel:1e-7", P + (seed === 2 ? " bench N, n, sigma, yaw with 5 runs (the calculator's defaults)" : ""));
   emit(`${a}.pred`, W.pred[N - 1], "rel:1e-7", P);
   emit(`${a}.rmsp`, W.rmsP[N - 1], "rel:1e-7", P);
 }
+emit("vowalk().pred", S.voWalk(2, 5, 100, 20, 1, 3).pred[99], "rel:1e-7", P + " calculator defaults");
+err("vowalk(100, 20, 1, 3, 200, 2)", "the bench's 200 runs exceed the gear cap N n M <= 40000");
 err("vowalk(1000, 200, 1, 3, 2000, 1)", "too much work");
 
 /* ---------- Chapter 9 (numpy) ---------- */
