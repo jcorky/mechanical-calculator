@@ -4,10 +4,15 @@
 //
 // Stack-up (z = 0 is the top face of the plate):
 //   case floor ............ z = -CaseParams::DepthBelowPlate
-//   PCB ................... top at z = -PcbGapBelowPlate (switch pins pass through it)
+//   PCB ................... top at z = -(PlateThickness + PcbGapBelowPlate), i.e. 5.0 mm below the
+//                           plate top as on every MX board; the switch pins pass through it
 //   plate ................. z in [-PlateThickness, 0]
 //   switch housing top .... rests on the plate; the stem's top (cap mount) at SwitchParams::StemTopZ when up
 //   keycap ................ its local origin sits on the stem top and moves with it
+//
+// "Stem top" is the cap mount: the flat top of the MX slider, from which the + cross rises a further
+// 3.7 mm into the keycap's socket. With the key up it is 6.6 mm above the plate (15.2 mm above the
+// PCB to the tip of the cross, per the Cherry MX spec, minus the cross).
 #pragma once
 
 #include "MeshBuilder.h"
@@ -47,8 +52,16 @@ struct KeycapTop
 	double FrontTiltRad = 0.0;
 };
 
+// Cap-local frame: the origin is the centre of the mouth of the cap's centre stem socket, which rests
+// on the stem top (the cap mount), so the whole cap moves with SwitchParts::Stem. The skirt reaches
+// 0.6 mm below the origin (the stem inset of Cherry-profile caps); the + cut-out runs up from z = 0.
+// Caps 2u and wider (or 2u tall) also carry stabilizer sockets at +-StabilizerSpacingMm.
+// UVs: the top surface maps the dish to 0..1 (U along x, V from front to back); every other vertex
+// has U in [-2, -1.5], so a legend material can mask on U >= 0.
+// KeycapTopFor returns values in this same cap-local frame.
 Mesh BuildKeycap(const KeycapParams& P);
 KeycapTop KeycapTopFor(const KeycapParams& P);
+// Sculpted row height: the top's plane at its back edge, above the bottom of the skirt.
 double KeycapHeightMm(int ProfileRow);
 
 enum class SwitchType
@@ -68,6 +81,10 @@ struct SwitchParams
 	int Segments = 12;
 };
 
+// Frames: HousingBottom, HousingTop, Contacts, Pins and Spring are in the plate frame (z = 0 is the
+// plate's top surface), centred on the switch. Stem has its own frame: z = 0 is its top (the cap
+// mount) with the key up, and the + cross rises above it; the keycap's local origin sits at that top,
+// so the adapter places both at StemTopZ and moves them down together by the travel.
 struct SwitchParts
 {
 	Mesh HousingBottom;         // opaque base below the plate, with the centre post and pins
@@ -83,6 +100,10 @@ struct SwitchParts
 SwitchParts BuildSwitch(const SwitchParams& P);
 
 // Costar-style plate-mount stabilizer for a key W units wide (spacing from the standard table).
+// Relative to the key's centre: Housings and Wire are in the plate frame (z = 0 is the plate's top
+// surface, x/y are offsets from the key centre). Stems is in the same frame as SwitchParts::Stem
+// (z = 0 is the stem top with the key up), so it attaches to the moving key. For Vertical = true the
+// two stems are spaced along y instead of x.
 struct StabilizerParts
 {
 	Mesh Housings;              // the two inserts clipped into the plate
@@ -116,6 +137,10 @@ struct BoardParts
 	Mesh PcbParts;              // diodes, controller chip, USB-C receptacle
 	Mesh DisplayBezel;          // the OLED module's frame
 	Mesh DisplayGlass;          // the emissive screen surface (UVs span 0..1 for a render target)
+	// The glass's top surface faces +z, rotated about +x by DisplayTiltRad (right-handed): a positive
+	// tilt raises its top edge (the edge away from the typist) so the screen leans back toward the
+	// typist. UV (0, 0) is the top-left corner as the typist sees it (min x, max y), U grows to the
+	// right and V toward the typist.
 	Vec3 DisplayCenter;         // centre of the glass, top surface
 	double DisplayWidthMm = 0.0;
 	double DisplayHeightMm = 0.0;

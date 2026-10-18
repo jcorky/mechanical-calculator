@@ -46,3 +46,8 @@ target_link_libraries(mcalc_cli PRIVATE mcalc_core)
 
 enable_testing()
 add_test(NAME mcalc_tests COMMAND mcalc_tests)
+
+# Preview: writes the assembled board as OBJ for Tests/preview/render.mjs (not part of the tests).
+add_executable(mcalc_export_obj ${CMAKE_CURRENT_SOURCE_DIR}/preview/export_obj.cpp)
+target_link_libraries(mcalc_export_obj PRIVATE mcalc_core)
+target_compile_options(mcalc_export_obj PRIVATE -Wall -Wextra -Werror)
