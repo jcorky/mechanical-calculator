@@ -751,30 +751,30 @@ Real Real::Sqrt(const Real& A)
 	N.Shift(Extra);
 	const long long LowExp = P / 2 - Extra / 2;
 	// Digits of N, units first, padded to an even count.
-	std::vector<uint8_t> Digits;
+	std::vector<uint8_t> NDigits;
 	{
 		D3 T = N;
 		const int Count = T.Digits();
 		for (int i = 0; i < Count; ++i)
 		{
-			Digits.push_back(static_cast<uint8_t>(T.L[0] % 10));
+			NDigits.push_back(static_cast<uint8_t>(T.L[0] % 10));
 			T.Drop(1);
 		}
-		if (Digits.size() % 2 != 0)
+		if (NDigits.size() % 2 != 0)
 		{
-			Digits.push_back(0);
+			NDigits.push_back(0);
 		}
 	}
 	if (UseMachine())
 	{
-		return RoundDigits(GearProcedures::SquareRoot(Digits, GearContext::Attached()), LowExp, false);
+		return RoundDigits(GearProcedures::SquareRoot(NDigits, GearContext::Attached()), LowExp, false);
 	}
 	// Toepler: at each column pair subtract 20y + 1, 20y + 3, ... while it goes.
 	D3 Rem, Y;
-	for (size_t j = Digits.size() / 2; j-- > 0;)
+	for (size_t j = NDigits.size() / 2; j-- > 0;)
 	{
 		Rem.MulSmall(100);
-		Rem.AddSmall(static_cast<uint64_t>(Digits[2 * j + 1] * 10 + Digits[2 * j]));
+		Rem.AddSmall(static_cast<uint64_t>(NDigits[2 * j + 1] * 10 + NDigits[2 * j]));
 		D3 Base = Y;
 		Base.MulSmall(20);
 		uint64_t X = 0;
