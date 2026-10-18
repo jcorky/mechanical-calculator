@@ -255,8 +255,8 @@ stdatm(10000).phyd	26436.242592692106	rel:1e-12	Planform.hydro(10000): Simpson i
 stdatm(15000).p	12044.552807152822	rel:1e-12	Planform.isa(15000)
 stdatm(15000).rho	0.1936734519563474	rel:1e-12	Planform.isa(15000)
 stdatm(15000).a	295.0694935090715	rel:1e-12	Planform.isa(15000)
-stdatm(15000).phyd	12044.552807172624	rel:1e-12	Planform.hydro(15000): Simpson integral of the hydrostatic equation
-stdatm(15000).rhohyd	0.19367345195666583	rel:1e-12	Planform.hydro(15000)
+stdatm(15000).phyd	12044.552807172624	rel:1e-11	Planform.hydro(15000): Simpson integral of the hydrostatic equation; 18-digit decimal vs IEEE double: z accumulated over 4000 steps, gear is closer to Planform.isa
+stdatm(15000).rhohyd	0.19367345195666583	rel:1e-11	Planform.hydro(15000); 18-digit decimal vs IEEE double: z accumulated over 4000 steps, gear is closer to Planform.isa
 stdatm(25000)	error	abs:0	ISA here stops at 20 km
 airsizing().CL	0.14871123901231864	rel:1e-12	Planform.sizing, page default: cruise CL 0.149
 airsizing().WS	1761.252143073651	rel:1e-12	Planform.sizing: W/S 1761 N/m^2
