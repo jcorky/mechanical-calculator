@@ -371,7 +371,9 @@ def weyl(a, n, bins=20):
 d_s, d_v = weyl(alpha, 100000)
 assert d_v < 1e-3
 case("weyl((sqrt(5) - 1)/2).dev", d_v, "rel:1e-9", f"{P8} claim 9: every bin within 0.1% for the golden ratio")
-case("weyl((sqrt(5) - 1)/2).dstar", d_s, "rel:1e-9", "star discrepancy of the golden Kronecker sequence")
+case("weyl((sqrt(5) - 1)/2).dstar", d_s, "rel:2e-7",
+     "star discrepancy of the golden Kronecker sequence; 18-digit decimal vs IEEE double: k*alpha for k up to 1e5 loses ~1e-12 absolute in double "
+     "(double is 1.1e-7 off the 50-digit value, the gears 4e-9)")
 case("weyl(sqrt(2), 1000, 10).dstar", weyl(math.sqrt(2), 1000, 10)[0], "rel:1e-9", "star discrepancy, alpha = sqrt 2")
 case("weyl(0.5, 1000).dev", weyl(0.5, 1000)[1], "rel:1e-12", "rational alpha is not equidistributed")
 err("weyl(0.3, 0)", "n must be >= 1")

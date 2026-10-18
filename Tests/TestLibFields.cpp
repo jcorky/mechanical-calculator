@@ -2,19 +2,24 @@
 #include "CalcSession.h"
 #include "TestFramework.h"
 
+#include "GearMath.h"
+
 #include <cstdint>
 #include <string>
 
+using mcalc::Real;
+namespace gm = mcalc::gm;
+
 namespace
 {
-double FieldsEval(const std::string& Expr)
+Real FieldsEval(const std::string& Expr)
 {
 	mcalc::Session S;
 	const mcalc::Outcome O = S.Execute(Expr);
 	if (!O.Ok || !O.HasValue || !O.Val.IsScalar())
 	{
 		mtest::Fail(__FILE__, __LINE__, Expr + " -> " + O.Text);
-		return 0.0;
+		return Real(0);
 	}
 	return O.Val.Scalar();
 }
@@ -72,7 +77,7 @@ TEST(fields_lll_bound_random_bases)
 		for (int Trial = 0; Trial < 6; ++Trial)
 		{
 			const std::string B = RandomBasis(N, &State);
-			if (std::fabs(FieldsEval("det(" + B + ")")) < 1.0)
+			if (gm::fabs(FieldsEval("det(" + B + ")")) < Real(1))
 			{
 				continue;
 			}
@@ -81,11 +86,13 @@ TEST(fields_lll_bound_random_bases)
 			{
 				B1 += " + L(1," + std::to_string(j) + ")^2";
 			}
-			const double First = std::sqrt(FieldsEval("L = lll(" + B + "); " + B1));
-			const double Lam = FieldsEval("shortvec(" + B + ")");
-			CHECK(Lam <= First * (1.0 + 1e-12));
-			CHECK(First <= FieldsEval("lllbound(" + std::to_string(N) + ")") * Lam * (1.0 + 1e-12));
-			CHECK_NEAR(std::fabs(FieldsEval("det(lll(" + B + "))")), std::fabs(FieldsEval("det(" + B + ")")), 1e-6 * std::fabs(FieldsEval("det(" + B + ")")));
+			const Real First = gm::sqrt(FieldsEval("L = lll(" + B + "); " + B1));
+			const Real Lam = FieldsEval("shortvec(" + B + ")");
+			const Real Slack = Real(1) + Real(1e-12);
+			CHECK(Lam <= First * Slack);
+			CHECK(First <= FieldsEval("lllbound(" + std::to_string(N) + ")") * Lam * Slack);
+			const Real Det = gm::fabs(FieldsEval("det(" + B + ")"));
+			CHECK_NEAR(gm::fabs(FieldsEval("det(lll(" + B + "))")), Det, Det * Real(1e-12));
 		}
 	}
 }
@@ -93,16 +100,16 @@ TEST(fields_lll_bound_random_bases)
 // phase8 claim 7: rounding <= bootstrapping, and integer decorrelation never lowers bootstrapping.
 TEST(fields_ambiguity_estimator_order)
 {
-	for (double Theta : {0.0, 0.4, 0.9, 1.3})
+	for (const char* Theta : {"0", "0.4", "0.9", "1.3"})
 	{
-		for (double B : {0.05, 0.15, 0.3})
+		for (const char* B : {"0.05", "0.15", "0.3"})
 		{
-			const std::string Q = "ellcov(0.6, " + std::to_string(B) + ", " + std::to_string(Theta) + ")";
-			const double Pr = FieldsEval("pround(" + Q + ")"), Pb = FieldsEval("pboot(" + Q + ")");
-			const double Pz = FieldsEval("Q = " + Q + "; Z = zdecor(Q); pboot(Z'*Q*Z)");
-			CHECK(Pr <= Pb + 1e-12);
-			CHECK(Pb <= Pz + 1e-12);
-			CHECK(Pz <= 1.0);
+			const std::string Q = std::string("ellcov(0.6, ") + B + ", " + Theta + ")";
+			const Real Pr = FieldsEval("pround(" + Q + ")"), Pb = FieldsEval("pboot(" + Q + ")");
+			const Real Pz = FieldsEval("Q = " + Q + "; Z = zdecor(Q); pboot(Z'*Q*Z)");
+			CHECK(Pr <= Pb + Real(1e-12));
+			CHECK(Pb <= Pz + Real(1e-12));
+			CHECK(Pz <= Real(1));
 		}
 	}
 	CHECK_NEAR(FieldsEval("pround(diag([0.04, 0.09]))"), FieldsEval("pboot(diag([0.04, 0.09]))"), 1e-12);
@@ -111,11 +118,11 @@ TEST(fields_ambiguity_estimator_order)
 // phase12 claim 4: Lloyd's energy never increases.
 TEST(fields_lloyd_energy_monotone)
 {
-	double Prev = FieldsEval("lloyd(0.7, 0).e");
+	Real Prev = FieldsEval("lloyd(0.7, 0).e");
 	for (int K = 1; K <= 12; ++K)
 	{
-		const double E = FieldsEval("lloyd(0.7, " + std::to_string(K) + ").e");
-		CHECK(E <= Prev + 1e-15);
+		const Real E = FieldsEval("lloyd(0.7, " + std::to_string(K) + ").e");
+		CHECK(E <= Prev + Real(1e-15));
 		Prev = E;
 	}
 }
@@ -135,18 +142,18 @@ TEST(fields_kernels_and_transport)
 		const std::string Row = "P(" + std::to_string(i) + ",1) + P(" + std::to_string(i) + ",2) + P(" + std::to_string(i) + ",3)";
 		CHECK_NEAR(FieldsEval("P = sinkhorn(" + C + ", 0.05); " + Row), 1.0, 1e-12);
 	}
-	CHECK(FieldsEval("sinkcost(" + C + ", 0.05)") >= FieldsEval("otexact(" + C + ")") - 1e-12);
+	CHECK(FieldsEval("sinkcost(" + C + ", 0.05)") >= FieldsEval("otexact(" + C + ")") - Real(1e-12));
 	CHECK_NEAR(FieldsEval("sinkcost(" + C + ", 0.005)"), FieldsEval("otexact(" + C + ")"), 1e-6);
 }
 
 // ch12 claim 2: the switch point lies on the curve x = -v|v|/2 and T = ts + |vs|.
 TEST(fields_bangbang_switch_on_curve)
 {
-	for (double X : {-2.0, -0.4, 0.7, 2.5})
+	for (const char* X : {"-2", "-0.4", "0.7", "2.5"})
 	{
-		for (double V : {-1.5, 0.3, 2.0})
+		for (const char* V : {"-1.5", "0.3", "2"})
 		{
-			const std::string B = "b = bangbang(" + std::to_string(X) + ", " + std::to_string(V) + "); ";
+			const std::string B = std::string("b = bangbang(") + X + ", " + V + "); ";
 			CHECK_NEAR(FieldsEval(B + "b.xs + b.vs*abs(b.vs)/2"), 0.0, 1e-12);
 			CHECK_NEAR(FieldsEval(B + "b.ts + abs(b.vs) - b.T"), 0.0, 1e-12);
 		}
