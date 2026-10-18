@@ -3,6 +3,7 @@
 #include "CalcSession.h"
 #include "TestFramework.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -17,7 +18,7 @@ double AtlasEval(mcalc::Session& S, const std::string& Line)
 		std::printf("    '%s' -> %s\n", Line.c_str(), O.Text.c_str());
 		return std::nan("");
 	}
-	return O.Val.Scalar();
+	return O.Val.Scalar().ToDouble();
 }
 
 struct AtlasLcg
@@ -144,7 +145,7 @@ TEST(atlas_lasso_optimality_conditions)
 		for (int j = 0; j < X.M.Count() && j < Gr.M.Count(); ++j)
 		{
 			// subgradient condition: |g_j| <= lambda, and g_j = lambda sign(x_j) on the support
-			const double Xj = X.M.V[static_cast<size_t>(j)], Gj = Gr.M.V[static_cast<size_t>(j)];
+			const double Xj = X.M.V[static_cast<size_t>(j)].ToDouble(), Gj = Gr.M.V[static_cast<size_t>(j)].ToDouble();
 			CHECK(std::fabs(Gj) <= Lam + 1e-9);
 			if (Xj != 0.0)
 			{
@@ -194,4 +195,37 @@ TEST(atlas_measure_and_filtering_identities)
 	// Halton points lie in the unit cube and the first coordinate is van der Corput base 2.
 	CHECK_NEAR(AtlasEval(S, "h = halton(64, 3); max(h)"), 63.0 / 64.0, 1e-15);
 	CHECK_NEAR(AtlasEval(S, "h(13, 1) - vdc(13)"), 0, 0);
+}
+
+// Each function at its bench defaults must answer within a keypress budget on the gears (the brief:
+// about 0.5 s at defaults, 2 s at the input caps). Slow ones are printed.
+TEST(atlas_timing_on_the_gears)
+{
+	struct Probe
+	{
+		const char* Line;
+		double LimitMs;
+	};
+	const Probe Probes[] = {
+		{"nav_index()", 500}, {"unwind()", 500}, {"qmc_err()", 500}, {"bode_int()", 500}, {"dualgap()", 500},
+		{"postmean([0.4, -0.2, 9.5, 0.9, 0.1])", 500}, {"comm_angle()", 500}, {"euler_cond()", 500}, {"is_w2(1.5)", 500},
+		{"wiener()", 500}, {"kf_ss()", 500}, {"navfn(0.3, -0.5)", 500},
+		{"lasso(reshape(linspace(-1, 1.3, 60), 12, 5) + [eye(5); zeros(7, 5)], linspace(0, 1, 12), 0.1)", 500},
+		{"lp(-ones(1, 20), ones(20, 20) + eye(20), ones(20, 1))", 500},
+		{"nav_index(2, 0, 0.6, 0.25, 400)", 2000}, {"qmc_err(100000, 1)", 2000}, {"qmc_err(12500, 8)", 2000}, {"x = halton(20000, 4)", 2000},
+		{"lq_cost(eye(2), [0; 1], eye(2), 1, eye(2), [1; 0], 2000)", 2000},
+	};
+	for (const Probe& P : Probes)
+	{
+		mcalc::Session S;
+		const auto T0 = std::chrono::steady_clock::now();
+		const mcalc::Outcome O = S.Execute(P.Line);
+		const double Ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - T0).count();
+		CHECK(O.Ok);
+		if (Ms > 50)
+		{
+			std::printf("    timing: %s took %.1f ms\n", P.Line, Ms);
+		}
+		CHECK(Ms < P.LimitMs);
+	}
 }

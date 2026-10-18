@@ -17,13 +17,11 @@ namespace mcalc
 {
 namespace atlas_detail
 {
-using V3 = std::array<double, 3>;
-using Q4 = std::array<double, 4>;
-
-const double AtlasInf = std::numeric_limits<double>::infinity();
+using V3 = std::array<Real, 3>;
+using Q4 = std::array<Real, 4>;
 
 // A matrix parameter whose default is a scalar (used for "equal weights" style defaults).
-Param MatOr(const char* Name, const char* Unit, double Default)
+Param MatOr(const char* Name, const char* Unit, Real Default)
 {
 	Param P = Mat(Name, Unit);
 	P.HasDefault = true;
@@ -53,11 +51,11 @@ bool ToQ4(const Matrix& M, Q4* Out)
 
 Matrix RowV3(const V3& A) { return Matrix::Row({A[0], A[1], A[2]}); }
 Matrix RowQ4(const Q4& Q) { return Matrix::Row({Q[0], Q[1], Q[2], Q[3]}); }
-double Dot3(const V3& A, const V3& B) { return A[0] * B[0] + A[1] * B[1] + A[2] * B[2]; }
-double Norm3(const V3& A) { return std::sqrt(Dot3(A, A)); }
+Real Dot3(const V3& A, const V3& B) { return A[0] * B[0] + A[1] * B[1] + A[2] * B[2]; }
+Real Norm3(const V3& A) { return gm::sqrt(Dot3(A, A)); }
 V3 Cross3(const V3& A, const V3& B) { return {A[1] * B[2] - A[2] * B[1], A[2] * B[0] - A[0] * B[2], A[0] * B[1] - A[1] * B[0]}; }
-V3 Scale3(const V3& A, double S) { return {A[0] * S, A[1] * S, A[2] * S}; }
-double NormQ(const Q4& Q) { return std::sqrt(Q[0] * Q[0] + Q[1] * Q[1] + Q[2] * Q[2] + Q[3] * Q[3]); }
+V3 Scale3(const V3& A, Real S) { return {A[0] * S, A[1] * S, A[2] * S}; }
+Real NormQ(const Q4& Q) { return gm::sqrt(Q[0] * Q[0] + Q[1] * Q[1] + Q[2] * Q[2] + Q[3] * Q[3]); }
 
 Matrix Hat3(const V3& W)
 {
@@ -75,17 +73,17 @@ V3 MulMV(const Matrix& A, const V3& V)
 	return {A(0, 0) * V[0] + A(0, 1) * V[1] + A(0, 2) * V[2], A(1, 0) * V[0] + A(1, 1) * V[1] + A(1, 2) * V[2], A(2, 0) * V[0] + A(2, 1) * V[1] + A(2, 2) * V[2]};
 }
 
-double Det3(const Matrix& M)
+Real Det3(const Matrix& M)
 {
 	return M(0, 0) * (M(1, 1) * M(2, 2) - M(1, 2) * M(2, 1)) - M(0, 1) * (M(1, 0) * M(2, 2) - M(1, 2) * M(2, 0)) + M(0, 2) * (M(1, 0) * M(2, 1) - M(1, 1) * M(2, 0));
 }
 
 // exp(theta [n]x) for a unit axis n (Rodrigues).
-Matrix Rodr(const V3& N, double Theta)
+Matrix Rodr(const V3& N, Real Theta)
 {
 	const Matrix K = Hat3(N);
 	const Matrix K2 = la::Mul(K, K);
-	const double S = std::sin(Theta), C = 1.0 - std::cos(Theta);
+	const Real S = gm::sin(Theta), C = 1.0 - gm::cos(Theta);
 	Matrix R = Matrix::Identity(3);
 	for (size_t i = 0; i < 9; ++i)
 	{
@@ -97,9 +95,9 @@ Matrix Rodr(const V3& N, double Theta)
 // R(q) = (w^2 - v.v) I + 2 v v' + 2 w [v]x, for a unit quaternion.
 Matrix QuatDcm(const Q4& Q)
 {
-	const double W = Q[0];
+	const Real W = Q[0];
 	const V3 Vv = {Q[1], Q[2], Q[3]};
-	const double Vn = Dot3(Vv, Vv);
+	const Real Vn = Dot3(Vv, Vv);
 	Matrix R(3, 3);
 	for (int i = 0; i < 3; ++i)
 	{
@@ -123,13 +121,13 @@ Q4 QuatProduct(const Q4& A, const Q4& B)
 		A[0] * B[3] + A[1] * B[2] - A[2] * B[1] + A[3] * B[0]};
 }
 
-// Fixes the double-cover sign: w >= 0, and for w = 0 the largest component positive.
+// Fixes the Real-cover sign: w >= 0, and for w = 0 the largest component positive.
 Q4 Canonical(Q4 Q)
 {
 	size_t Big = 0;
 	for (size_t i = 1; i < 4; ++i)
 	{
-		if (std::fabs(Q[i]) > std::fabs(Q[Big]))
+		if (gm::fabs(Q[i]) > gm::fabs(Q[Big]))
 		{
 			Big = i;
 		}
@@ -137,7 +135,7 @@ Q4 Canonical(Q4 Q)
 	const bool Flip = Q[0] < 0.0 || (Q[0] == 0.0 && Q[Big] < 0.0);
 	if (Flip)
 	{
-		for (double& X : Q)
+		for (Real& X : Q)
 		{
 			X = -X;
 		}
@@ -164,30 +162,30 @@ bool IsRotation(const Matrix& R, std::string* Why)
 // Shepperd's method, returning w >= 0.
 Q4 DcmQuat(const Matrix& R)
 {
-	const double T = R(0, 0) + R(1, 1) + R(2, 2);
+	const Real T = R(0, 0) + R(1, 1) + R(2, 2);
 	Q4 Q = {0, 0, 0, 0};
 	if (T >= R(0, 0) && T >= R(1, 1) && T >= R(2, 2))
 	{
-		const double W = 0.5 * std::sqrt(1.0 + T);
+		const Real W = 0.5 * gm::sqrt(1.0 + T);
 		Q = {W, (R(2, 1) - R(1, 2)) / (4 * W), (R(0, 2) - R(2, 0)) / (4 * W), (R(1, 0) - R(0, 1)) / (4 * W)};
 	}
 	else if (R(0, 0) >= R(1, 1) && R(0, 0) >= R(2, 2))
 	{
-		const double X = 0.5 * std::sqrt(std::max(0.0, 1.0 + R(0, 0) - R(1, 1) - R(2, 2)));
+		const Real X = 0.5 * gm::sqrt(gm::max(0.0, 1.0 + R(0, 0) - R(1, 1) - R(2, 2)));
 		Q = {(R(2, 1) - R(1, 2)) / (4 * X), X, (R(0, 1) + R(1, 0)) / (4 * X), (R(0, 2) + R(2, 0)) / (4 * X)};
 	}
 	else if (R(1, 1) >= R(2, 2))
 	{
-		const double Y = 0.5 * std::sqrt(std::max(0.0, 1.0 - R(0, 0) + R(1, 1) - R(2, 2)));
+		const Real Y = 0.5 * gm::sqrt(gm::max(0.0, 1.0 - R(0, 0) + R(1, 1) - R(2, 2)));
 		Q = {(R(0, 2) - R(2, 0)) / (4 * Y), (R(0, 1) + R(1, 0)) / (4 * Y), Y, (R(1, 2) + R(2, 1)) / (4 * Y)};
 	}
 	else
 	{
-		const double Z = 0.5 * std::sqrt(std::max(0.0, 1.0 - R(0, 0) - R(1, 1) + R(2, 2)));
+		const Real Z = 0.5 * gm::sqrt(gm::max(0.0, 1.0 - R(0, 0) - R(1, 1) + R(2, 2)));
 		Q = {(R(1, 0) - R(0, 1)) / (4 * Z), (R(0, 2) + R(2, 0)) / (4 * Z), (R(1, 2) + R(2, 1)) / (4 * Z), Z};
 	}
-	const double N = NormQ(Q);
-	for (double& X : Q)
+	const Real N = NormQ(Q);
+	for (Real& X : Q)
 	{
 		X /= N;
 	}
@@ -198,8 +196,8 @@ Q4 DcmQuat(const Matrix& R)
 V3 LogSo3(const Matrix& R)
 {
 	const V3 S2 = {R(2, 1) - R(1, 2), R(0, 2) - R(2, 0), R(1, 0) - R(0, 1)};   // 2 sin(theta) n
-	const double SinT = 0.5 * Norm3(S2), CosT = 0.5 * (R(0, 0) + R(1, 1) + R(2, 2) - 1.0);
-	const double Theta = std::atan2(SinT, CosT);
+	const Real SinT = 0.5 * Norm3(S2), CosT = 0.5 * (R(0, 0) + R(1, 1) + R(2, 2) - 1.0);
+	const Real Theta = gm::atan2(SinT, CosT);
 	if (SinT < 1e-15 && CosT > 0.0)
 	{
 		return Scale3(S2, 0.5);
@@ -235,7 +233,7 @@ V3 LogSo3(const Matrix& R)
 }
 
 // Vector observations: r and b as n x 3 (one vector per row), weights a scalar (all equal) or n values.
-bool Observations(const Call& C, size_t IR, size_t IB, size_t IW, std::vector<V3>* Rs, std::vector<V3>* Bs, std::vector<double>* Ws, std::string* Err)
+bool Observations(const Call& C, size_t IR, size_t IB, size_t IW, std::vector<V3>* Rs, std::vector<V3>* Bs, std::vector<Real>* Ws, std::string* Err)
 {
 	const Matrix &MR = C.M(IR), &MB = C.M(IB), &MW = C.M(IW);
 	if (MR.Cols != 3 || MB.Cols != 3 || MR.Rows != MB.Rows || MR.Rows < 1)
@@ -253,7 +251,7 @@ bool Observations(const Call& C, size_t IR, size_t IB, size_t IW, std::vector<V3
 	{
 		Rs->push_back({MR(i, 0), MR(i, 1), MR(i, 2)});
 		Bs->push_back({MB(i, 0), MB(i, 1), MB(i, 2)});
-		const double W = MW.IsScalar() ? MW.ScalarValue() : MW.V[static_cast<size_t>(i)];
+		const Real W = MW.IsScalar() ? MW.ScalarValue() : MW.V[static_cast<size_t>(i)];
 		if (!(W >= 0.0))
 		{
 			*Err = "weights must be non-negative";
@@ -264,7 +262,7 @@ bool Observations(const Call& C, size_t IR, size_t IB, size_t IW, std::vector<V3
 	return true;
 }
 
-Matrix DavenportK(const std::vector<V3>& Rs, const std::vector<V3>& Bs, const std::vector<double>& Ws, Matrix* BOut)
+Matrix DavenportK(const std::vector<V3>& Rs, const std::vector<V3>& Bs, const std::vector<Real>& Ws, Matrix* BOut)
 {
 	Matrix B(3, 3);
 	V3 Z = {0, 0, 0};
@@ -283,7 +281,7 @@ Matrix DavenportK(const std::vector<V3>& Rs, const std::vector<V3>& Bs, const st
 			Z[i] += Ws[k] * Cr[i];
 		}
 	}
-	const double Sigma = la::Trace(B);
+	const Real Sigma = la::Trace(B);
 	Matrix K(4, 4);
 	K(0, 0) = Sigma;
 	for (int i = 0; i < 3; ++i)
@@ -304,15 +302,15 @@ Matrix DavenportK(const std::vector<V3>& Rs, const std::vector<V3>& Bs, const st
 
 bool TopEigvec4(const Matrix& K, Q4* Q, std::string* Err)
 {
-	std::vector<double> W;
+	std::vector<Real> W;
 	Matrix V;
 	if (!la::SymmetricEigen(K, &W, &V, Err))
 	{
 		return false;
 	}
 	*Q = {V(0, 3), V(1, 3), V(2, 3), V(3, 3)};
-	const double N = NormQ(*Q);
-	for (double& X : *Q)
+	const Real N = NormQ(*Q);
+	for (Real& X : *Q)
 	{
 		X /= N;
 	}
@@ -348,7 +346,7 @@ Result Rodrigues(const Call& C)
 	{
 		return Result::Fail("axis must be a 3-vector");
 	}
-	const double L = Norm3(N);
+	const Real L = Norm3(N);
 	if (!(L > 0.0))
 	{
 		return Result::Fail("axis must be nonzero");
@@ -363,7 +361,7 @@ Result ExpSo3(const Call& C)
 	{
 		return Result::Fail("needs a rotation vector (3-vector, rad)");
 	}
-	const double T = Norm3(W);
+	const Real T = Norm3(W);
 	if (T < 1e-12)
 	{
 		const Matrix K = Hat3(W);
@@ -399,13 +397,13 @@ Result QuatFn(const Call& C)
 	{
 		return Result::Fail("axis must be a 3-vector");
 	}
-	const double L = Norm3(N);
+	const Real L = Norm3(N);
 	if (!(L > 0.0))
 	{
 		return Result::Fail("axis must be nonzero");
 	}
-	const double H = 0.5 * C.N(1), S = std::sin(H) / L;
-	return Result::Of(RowQ4({std::cos(H), N[0] * S, N[1] * S, N[2] * S}));
+	const Real H = 0.5 * C.N(1), S = gm::sin(H) / L;
+	return Result::Of(RowQ4({gm::cos(H), N[0] * S, N[1] * S, N[2] * S}));
 }
 
 Result QuatMul(const Call& C)
@@ -435,13 +433,13 @@ bool UnitQuat(const Matrix& M, Q4* Q, std::string* Err)
 		*Err = "needs a quaternion [w, x, y, z]";
 		return false;
 	}
-	const double N = NormQ(*Q);
+	const Real N = NormQ(*Q);
 	if (!(N > 0.0))
 	{
 		*Err = "the zero quaternion is not a rotation";
 		return false;
 	}
-	for (double& X : *Q)
+	for (Real& X : *Q)
 	{
 		X /= N;
 	}
@@ -495,31 +493,31 @@ Result Slerp(const Call& C)
 	{
 		return Result::Fail(E);
 	}
-	const double T = C.N(2);
-	double D = A[0] * B[0] + A[1] * B[1] + A[2] * B[2] + A[3] * B[3];
+	const Real T = C.N(2);
+	Real D = A[0] * B[0] + A[1] * B[1] + A[2] * B[2] + A[3] * B[3];
 	if (D < 0.0)
 	{
 		// q and -q are the same attitude: take the short way round.
-		for (double& X : B)
+		for (Real& X : B)
 		{
 			X = -X;
 		}
 		D = -D;
 	}
-	const double Om = std::acos(std::min(1.0, D));
-	double Ka = 1.0 - T, Kb = T;
+	const Real Om = gm::acos(gm::min(1.0, D));
+	Real Ka = 1.0 - T, Kb = T;
 	if (Om > 1e-9)
 	{
-		Ka = std::sin((1.0 - T) * Om) / std::sin(Om);
-		Kb = std::sin(T * Om) / std::sin(Om);
+		Ka = gm::sin((1.0 - T) * Om) / gm::sin(Om);
+		Kb = gm::sin(T * Om) / gm::sin(Om);
 	}
 	Q4 Q;
 	for (size_t i = 0; i < 4; ++i)
 	{
 		Q[i] = Ka * A[i] + Kb * B[i];
 	}
-	const double N = NormQ(Q);
-	for (double& X : Q)
+	const Real N = NormQ(Q);
+	for (Real& X : Q)
 	{
 		X /= N;
 	}
@@ -552,7 +550,7 @@ Result CommAngle(const Call& C)
 Result Davenport(const Call& C)
 {
 	std::vector<V3> Rs, Bs;
-	std::vector<double> Ws;
+	std::vector<Real> Ws;
 	std::string E;
 	if (!Observations(C, 0, 1, 2, &Rs, &Bs, &Ws, &E))
 	{
@@ -564,7 +562,7 @@ Result Davenport(const Call& C)
 Result QMethod(const Call& C)
 {
 	std::vector<V3> Rs, Bs;
-	std::vector<double> Ws;
+	std::vector<Real> Ws;
 	std::string E;
 	if (!Observations(C, 0, 1, 2, &Rs, &Bs, &Ws, &E))
 	{
@@ -581,7 +579,7 @@ Result QMethod(const Call& C)
 Result WahbaSvd(const Call& C)
 {
 	std::vector<V3> Rs, Bs;
-	std::vector<double> Ws;
+	std::vector<Real> Ws;
 	std::string E;
 	if (!Observations(C, 0, 1, 2, &Rs, &Bs, &Ws, &E))
 	{
@@ -589,12 +587,12 @@ Result WahbaSvd(const Call& C)
 	}
 	Matrix B, U, Vt;
 	DavenportK(Rs, Bs, Ws, &B);
-	std::vector<double> S;
+	std::vector<Real> S;
 	if (!la::Svd(B, &U, &S, &Vt, &E))
 	{
 		return Result::Fail(E);
 	}
-	const double D = Det3(U) * Det3(Vt);
+	const Real D = Det3(U) * Det3(Vt);
 	Matrix Dm = Matrix::Identity(3);
 	Dm(2, 2) = D < 0.0 ? -1.0 : 1.0;
 	return Result::Of(la::Mul(la::Mul(U, Dm), Vt));
@@ -603,7 +601,7 @@ Result WahbaSvd(const Call& C)
 Result WahbaLoss(const Call& C)
 {
 	std::vector<V3> Rs, Bs;
-	std::vector<double> Ws;
+	std::vector<Real> Ws;
 	std::string E;
 	if (C.M(0).Rows != 3 || C.M(0).Cols != 3)
 	{
@@ -613,7 +611,7 @@ Result WahbaLoss(const Call& C)
 	{
 		return Result::Fail(E);
 	}
-	double L = 0.0;
+	Real L = 0.0;
 	for (size_t k = 0; k < Rs.size(); ++k)
 	{
 		const V3 Ar = MulMV(C.M(0), Rs[k]);
@@ -626,7 +624,7 @@ Result WahbaLoss(const Call& C)
 bool TriadFrame(const V3& X, const V3& Y, Matrix* F)
 {
 	const V3 Cxy = Cross3(X, Y);
-	const double Nx = Norm3(X), Nc = Norm3(Cxy);
+	const Real Nx = Norm3(X), Nc = Norm3(Cxy);
 	if (!(Nx > 0.0) || !(Nc > 1e-12 * Nx * Norm3(Y)))
 	{
 		return false;
@@ -672,12 +670,12 @@ Result QuatMean(const Call& C)
 	for (int k = 0; k < Q.Rows; ++k)
 	{
 		Q4 Qk = {Q(k, 0), Q(k, 1), Q(k, 2), Q(k, 3)};
-		const double N = NormQ(Qk);
+		const Real N = NormQ(Qk);
 		if (!(N > 0.0))
 		{
 			return Result::Fail("zero quaternion in row " + std::to_string(k + 1));
 		}
-		const double Wk = W.IsScalar() ? W.ScalarValue() : W.V[static_cast<size_t>(k)];
+		const Real Wk = W.IsScalar() ? W.ScalarValue() : W.V[static_cast<size_t>(k)];
 		for (int i = 0; i < 4; ++i)
 		{
 			for (int j = 0; j < 4; ++j)
@@ -702,20 +700,20 @@ Result ExpSe3(const Call& C)
 	{
 		return Result::Fail("needs omega and nu as 3-vectors");
 	}
-	const double T = Norm3(W);
+	const Real T = Norm3(W);
 	const Matrix K = Hat3(W), K2 = la::Mul(K, K);
-	double A = 0.5, B = 1.0 / 6.0;   // series limits of (1 - cos t)/t^2 and (t - sin t)/t^3
+	Real A = 0.5, B = Real(1) / 6;   // series limits of (1 - cos t)/t^2 and (t - sin t)/t^3
 	Matrix R;
 	if (T < 1e-6)
 	{
-		A = 0.5 - T * T / 24.0;
-		B = 1.0 / 6.0 - T * T / 120.0;
+		A = 0.5 - T * T / 24;
+		B = Real(1) / 6 - T * T / 120;
 		R = la::Add(la::Add(Matrix::Identity(3), K), la::Scale(K2, 0.5));
 	}
 	else
 	{
-		A = (1.0 - std::cos(T)) / (T * T);
-		B = (T - std::sin(T)) / (T * T * T);
+		A = (1.0 - gm::cos(T)) / (T * T);
+		B = (T - gm::sin(T)) / (T * T * T);
 		R = Rodr(Scale3(W, 1.0 / T), T);
 	}
 	const Matrix V = la::Add(la::Add(Matrix::Identity(3), la::Scale(K, A)), la::Scale(K2, B));
@@ -747,20 +745,20 @@ Result AttErr(const Call& C)
 
 // ---------------------------------------------------------------- ch02 topology
 
-Matrix EulerE(double Phi, double Theta)
+Matrix EulerE(Real Phi, Real Theta)
 {
-	const double T = std::tan(Theta), Cth = std::cos(Theta), S = std::sin(Phi), Cp = std::cos(Phi);
+	const Real T = gm::tan(Theta), Cth = gm::cos(Theta), S = gm::sin(Phi), Cp = gm::cos(Phi);
 	return Matrix::FromRows({{1.0, S * T, Cp * T}, {0.0, Cp, -S}, {0.0, S / Cth, Cp / Cth}});
 }
 
-bool GimbalOk(double Theta)
+bool GimbalOk(Real Theta)
 {
-	return std::fabs(std::cos(Theta)) > 1e-12;
+	return gm::fabs(gm::cos(Theta)) > 1e-12;
 }
 
 Result EulerRates(const Call& C)
 {
-	const double Phi = C.N(0), Theta = C.N(1);
+	const Real Phi = C.N(0), Theta = C.N(1);
 	if (!GimbalOk(Theta))
 	{
 		return Result::Fail("gimbal lock: cos(theta) = 0, the Euler rates are unbounded");
@@ -784,7 +782,7 @@ Result EulerCond(const Call& C)
 	{
 		return Result::Fail("gimbal lock: cos(theta) = 0");
 	}
-	std::vector<double> S;
+	std::vector<Real> S;
 	std::string E;
 	if (!la::Svd(EulerE(C.N(0), C.N(1)), nullptr, &S, nullptr, &E))
 	{
@@ -807,9 +805,9 @@ Result Dcm2Eul(const Call& C)
 		return Result::Fail(Why);
 	}
 	const Matrix& R = C.M(0);
-	const double Phi = std::atan2(R(2, 1), R(2, 2));
-	const double Theta = -std::asin(std::max(-1.0, std::min(1.0, R(2, 0))));
-	const double Psi = std::atan2(R(1, 0), R(0, 0));
+	const Real Phi = gm::atan2(R(2, 1), R(2, 2));
+	const Real Theta = -gm::asin(gm::max(-1.0, gm::min(1.0, R(2, 0))));
+	const Real Psi = gm::atan2(R(1, 0), R(0, 0));
 	return Result::Record({{"phi", Phi}, {"theta", Theta}, {"psi", Psi}});
 }
 
@@ -822,7 +820,7 @@ Result LookAt(const Call& C)
 	}
 	D = Scale3(D, 1.0 / Norm3(D));
 	const V3 U = {-D[2] * D[0], -D[2] * D[1], 1.0 - D[2] * D[2]};
-	const double N = Norm3(U);
+	const Real N = Norm3(U);
 	if (N < 1e-9)
 	{
 		return Result::Fail("boresight along world up: the up-vector field vanishes here (hairy ball theorem)");
@@ -832,17 +830,21 @@ Result LookAt(const Call& C)
 
 struct NavWorld
 {
-	double K, Gx, Gy;
-	double Cx[3], Cy[3], Rr[3];
+	Real K, Gx, Gy;
+	int IntK;   // k when it is a whole number 1..64, else 0
+	Real InvK;  // 1/k, set once per call
+	Real Cx[3], Cy[3], Rr[3];
 };
 
-NavWorld MakeNavWorld(double K, double Gx, double Gy, double BigR)
+NavWorld MakeNavWorld(Real K, Real Gx, Real Gy, Real BigR)
 {
 	NavWorld W;
 	W.K = K;
+	W.IntK = (K == gm::floor(K) && K >= 1 && K <= 64) ? K.ToInt() : 0;
+	W.InvK = 1 / K;
 	W.Gx = Gx;
 	W.Gy = Gy;
-	const double Cx[3] = {0.0, -0.5, 0.5}, Cy[3] = {0.0, 0.35, 0.35}, Rr[3] = {BigR, 0.15, 0.15};
+	const Real Cx[3] = {0.0, -0.5, 0.5}, Cy[3] = {0.0, 0.35, 0.35}, Rr[3] = {BigR, 0.15, 0.15};
 	for (int i = 0; i < 3; ++i)
 	{
 		W.Cx[i] = Cx[i];
@@ -853,13 +855,13 @@ NavWorld MakeNavWorld(double K, double Gx, double Gy, double BigR)
 }
 
 // Rimon-Koditschek navigation function value and gradient (ch02 bench 4); false outside free space.
-bool NavEval(double X, double Y, const NavWorld& W, double* F, double* Fx, double* Fy)
+bool NavEval(Real X, Real Y, const NavWorld& W, Real* F, Real* Fx, Real* Fy)
 {
-	const double G = (X - W.Gx) * (X - W.Gx) + (Y - W.Gy) * (Y - W.Gy), Dgx = 2 * (X - W.Gx), Dgy = 2 * (Y - W.Gy);
-	double B = 1 - (X * X + Y * Y), Bx = -2 * X, By = -2 * Y;
+	const Real G = (X - W.Gx) * (X - W.Gx) + (Y - W.Gy) * (Y - W.Gy), Dgx = 2 * (X - W.Gx), Dgy = 2 * (Y - W.Gy);
+	Real B = 1 - (X * X + Y * Y), Bx = -2 * X, By = -2 * Y;
 	for (int i = 0; i < 3; ++i)
 	{
-		const double T = (X - W.Cx[i]) * (X - W.Cx[i]) + (Y - W.Cy[i]) * (Y - W.Cy[i]) - W.Rr[i] * W.Rr[i], Tx = 2 * (X - W.Cx[i]), Ty = 2 * (Y - W.Cy[i]);
+		const Real T = (X - W.Cx[i]) * (X - W.Cx[i]) + (Y - W.Cy[i]) * (Y - W.Cy[i]) - W.Rr[i] * W.Rr[i], Tx = 2 * (X - W.Cx[i]), Ty = 2 * (Y - W.Cy[i]);
 		Bx = Bx * T + B * Tx;
 		By = By * T + B * Ty;
 		B = B * T;
@@ -868,16 +870,47 @@ bool NavEval(double X, double Y, const NavWorld& W, double* F, double* Fx, doubl
 	{
 		return false;
 	}
-	const double K = W.K, D = std::pow(G, K) + B, A = std::pow(D, -1 / K), Bm = std::pow(D, -1 / K - 1), Gk1 = K * std::pow(G, K - 1);
+	// gamma^k and (gamma^k + beta)^(-1/k); integer k (the bench's usual setting) by multiplication.
+	const Real K = W.K;
+	Real Gk, Gk1, A;
+	if (W.IntK > 0)
+	{
+		Gk1 = gm::powi(G, W.IntK - 1);
+		Gk = Gk1 * G;
+	}
+	else
+	{
+		Gk = gm::pow(G, K);
+		Gk1 = gm::pow(G, K - 1);
+	}
+	const Real D = Gk + B;
+	Real Bm;   // D^(-1/k - 1)
+	if (W.IntK == 1)
+	{
+		A = 1 / D;
+		Bm = A * A;
+	}
+	else if (W.IntK == 2)
+	{
+		A = 1 / gm::sqrt(D);
+		Bm = A * A * A;
+	}
+	else
+	{
+		A = gm::pow(D, -W.InvK);
+		Bm = A / D;
+	}
+	const Real Coef = G * W.InvK * Bm;
+	Gk1 = K * Gk1;
 	*F = G * A;
-	*Fx = Dgx * A - G / K * Bm * (Gk1 * Dgx + Bx);
-	*Fy = Dgy * A - G / K * Bm * (Gk1 * Dgy + By);
+	*Fx = Dgx * A - Coef * (Gk1 * Dgx + Bx);
+	*Fy = Dgy * A - Coef * (Gk1 * Dgy + By);
 	return true;
 }
 
 bool NavArgs(const Call& C, size_t First, NavWorld* W, std::string* Err)
 {
-	const double K = C.N(First), BigR = C.N(First + 3);
+	const Real K = C.N(First), BigR = C.N(First + 3);
 	if (!(K >= 1.0))
 	{
 		*Err = "k must be >= 1";
@@ -900,25 +933,12 @@ Result NavFn(const Call& C)
 	{
 		return Result::Fail(E);
 	}
-	double F = 0, Fx = 0, Fy = 0;
+	Real F = 0, Fx = 0, Fy = 0;
 	if (!NavEval(C.N(0), C.N(1), W, &F, &Fx, &Fy))
 	{
 		return Result::Fail("point is outside the free space (in an obstacle or outside the unit disk)");
 	}
 	return Result::Record({{"phi", F}, {"fx", Fx}, {"fy", Fy}});
-}
-
-double WrapPi(double T)
-{
-	while (T > cst::Pi)
-	{
-		T -= 2 * cst::Pi;
-	}
-	while (T < -cst::Pi)
-	{
-		T += 2 * cst::Pi;
-	}
-	return T;
 }
 
 // Gradient winding per grid cell, as the chapter bench finds critical points (Poincare-Hopf: total = 1 - M).
@@ -935,22 +955,46 @@ Result NavIndex(const Call& C)
 	{
 		return Result::Fail("grid size n must be 10..400");
 	}
-	std::vector<double> Ang(static_cast<size_t>(N * N), 0.0);
+	std::vector<Real> Gx(static_cast<size_t>(N * N), 0.0), Gy(static_cast<size_t>(N * N), 0.0);
 	std::vector<char> Ok(static_cast<size_t>(N * N), 0);
+	std::vector<Real> Coord(static_cast<size_t>(N));
 	for (int i = 0; i < N; ++i)
 	{
+		Coord[static_cast<size_t>(i)] = -1 + Real(2 * i) / Real(N - 1);
+	}
+	for (int i = 0; i < N; ++i)
+	{
+		const Real Y = Coord[static_cast<size_t>(i)];
 		for (int j = 0; j < N; ++j)
 		{
-			double F = 0, Fx = 0, Fy = 0;
-			const double X = -1 + 2.0 * j / (N - 1), Y = -1 + 2.0 * i / (N - 1);
+			Real F = 0, Fx = 0, Fy = 0;
+			const Real X = Coord[static_cast<size_t>(j)];
 			const size_t Ix = static_cast<size_t>(i * N + j);
 			if (NavEval(X, Y, W, &F, &Fx, &Fy))
 			{
 				Ok[Ix] = 1;
-				Ang[Ix] = std::atan2(Fy, Fx);
+				Gx[Ix] = Fx;
+				Gy[Ix] = Fy;
 			}
 		}
 	}
+	// The bench sums angle steps wrapped to (-pi, pi] and divides by 2 pi. Around a closed loop the raw
+	// atan2 steps cancel, so the winding is exactly the signed count of wraps: short-way steps that cross
+	// the atan2 branch cut (the negative x axis). That needs only signs and a cross product, no atan2.
+	auto Upper = [&Gx, &Gy](size_t Ix) { return Gy[Ix] > 0 || (Gy[Ix] == 0 && Gx[Ix] < 0); };
+	auto Wraps = [&Gx, &Gy, &Upper](size_t Ia, size_t Ic) {
+		const Real Cr = Gx[Ia] * Gy[Ic] - Gy[Ia] * Gx[Ic];
+		const bool Ua = Upper(Ia), Uc = Upper(Ic);
+		if (!Ua && Uc && Cr < 0)
+		{
+			return -1;   // raw step > pi, wrapped by -2 pi
+		}
+		if (Ua && !Uc && Cr > 0)
+		{
+			return 1;    // raw step < -pi, wrapped by +2 pi
+		}
+		return 0;
+	};
 	int Total = 0, Plus = 0, Minus = 0;
 	auto At = [N](int i, int j) { return static_cast<size_t>(i * N + j); };
 	for (int i = 0; i < N - 1; ++i)
@@ -961,46 +1005,44 @@ Result NavIndex(const Call& C)
 			{
 				continue;
 			}
-			const double S = WrapPi(Ang[At(i, j + 1)] - Ang[At(i, j)]) + WrapPi(Ang[At(i + 1, j + 1)] - Ang[At(i, j + 1)]) + WrapPi(Ang[At(i + 1, j)] - Ang[At(i + 1, j + 1)]) +
-				WrapPi(Ang[At(i, j)] - Ang[At(i + 1, j)]);
-			const int Wnd = static_cast<int>(std::floor(S / (2 * cst::Pi) + 0.5));
+			const int Wnd = Wraps(At(i, j), At(i, j + 1)) + Wraps(At(i, j + 1), At(i + 1, j + 1)) + Wraps(At(i + 1, j + 1), At(i + 1, j)) + Wraps(At(i + 1, j), At(i, j));
 			Total += Wnd;
 			Plus += Wnd > 0 ? 1 : 0;
 			Minus += Wnd < 0 ? 1 : 0;
 		}
 	}
-	return Result::Record({{"total", static_cast<double>(Total)}, {"plus", static_cast<double>(Plus)}, {"minus", static_cast<double>(Minus)}});
+	return Result::Record({{"total", Real(Total)}, {"plus", Real(Plus)}, {"minus", Real(Minus)}});
 }
 
 // mulberry32, bit-for-bit as in the chapter pages, and their Box-Muller gauss().
 struct Mulberry
 {
 	uint32_t S;
-	double Next()
+	Real Next()
 	{
 		S += 0x6D2B79F5u;
 		uint32_t T = S;
 		T = (T ^ (T >> 15)) * (T | 1u);
 		T ^= T + (T ^ (T >> 7)) * (T | 61u);
-		return static_cast<double>(T ^ (T >> 14)) / 4294967296.0;
+		return Real(T ^ (T >> 14)) / Real(4294967296ull);
 	}
-	double Gauss()
+	Real Gauss()
 	{
-		double U = 0.0;
+		Real U = 0.0;
 		while (U == 0.0)
 		{
 			U = Next();
 		}
-		return std::sqrt(-2 * std::log(U)) * std::cos(2 * cst::Pi * Next());
+		return gm::sqrt(-2 * gm::log(U)) * gm::cos(2 * cst::Pi() * Next());
 	}
 };
 
-double Len4(const Q4& Q) { return std::sqrt(Q[0] * Q[0] + Q[1] * Q[1] + Q[2] * Q[2] + Q[3] * Q[3]); }
+Real Len4(const Q4& Q) { return gm::sqrt(Q[0] * Q[0] + Q[1] * Q[1] + Q[2] * Q[2] + Q[3] * Q[3]); }
 
 // The unwinding bench: unit-inertia body, quaternion PD feedback, three laws (ch02 counterexample 2).
 Result Unwind(const Call& C)
 {
-	const double Th0 = C.N(0), Sigma = C.N(2), W0 = C.N(3);
+	const Real Th0 = C.N(0), Sigma = C.N(2), W0 = C.N(3);
 	const int Law = C.Int(1);
 	if (Law < 0 || Law > 2)
 	{
@@ -1012,26 +1054,27 @@ Result Unwind(const Call& C)
 	}
 	V3 Axis = {0.3, -0.4, 0.866};
 	Axis = Scale3(Axis, 1.0 / Norm3(Axis));
-	const double Kp = 1, Kd = 1.4, Dt = 0.01, Tend = 25, Hyst = 0.2;
-	Q4 Q = {std::cos(Th0 / 2), Axis[0] * std::sin(Th0 / 2), Axis[1] * std::sin(Th0 / 2), Axis[2] * std::sin(Th0 / 2)};
+	const Real Kp = 1, Kd = 1.4, Dt = 0.01, Tend = 25, Hyst = 0.2;
+	Q4 Q = {gm::cos(Th0 / 2), Axis[0] * gm::sin(Th0 / 2), Axis[1] * gm::sin(Th0 / 2), Axis[2] * gm::sin(Th0 / 2)};
 	V3 W = Scale3(Axis, W0);
-	double H = 1, Travelled = 0, LastSign = 0;
+	Real H = 1, Travelled = 0, LastSign = 0;
 	int Switches = 0;
 	bool HaveLast = false;
 	Mulberry Rng{99u};
-	for (int k = 0; k <= Tend / Dt; ++k)
+	const Real Steps = Tend / Dt;
+	for (int k = 0; Real(k) <= Steps; ++k)
 	{
 		Q4 Qm;
 		for (size_t i = 0; i < 4; ++i)
 		{
 			Qm[i] = Q[i] + Sigma * Rng.Gauss();
 		}
-		const double Nm = Len4(Qm);
-		for (double& X : Qm)
+		const Real Nm = Len4(Qm);
+		for (Real& X : Qm)
 		{
 			X /= Nm;
 		}
-		double S = 1;
+		Real S = 1;
 		if (Law == 1)
 		{
 			S = Qm[0] >= 0 ? 1 : -1;
@@ -1066,14 +1109,14 @@ Result Unwind(const Call& C)
 		{
 			Qn[i] = Q[i] + 0.5 * Qd[i] * Dt;
 		}
-		const double Nq = Len4(Qn);
+		const Real Nq = Len4(Qn);
 		for (size_t i = 0; i < 4; ++i)
 		{
 			Q[i] = Qn[i] / Nq;
 		}
 	}
-	const double Final = 2 * std::acos(std::min(1.0, std::fabs(Q[0])));
-	return Result::Record({{"travelled", Travelled}, {"switches", static_cast<double>(Switches)}, {"final", Final}});
+	const Real Final = 2 * gm::acos(gm::min(1.0, gm::fabs(Q[0])));
+	return Result::Record({{"travelled", Travelled}, {"switches", Real(Switches)}, {"final", Final}});
 }
 
 // ---------------------------------------------------------------- ch04 Hilbert spaces
@@ -1122,17 +1165,17 @@ Result GramSchmidt(const Call& C)
 	{
 		return Result::Fail("needs a matrix");
 	}
-	double Scale = 0.0;
-	for (double X : Q.V)
+	Real Scale = 0.0;
+	for (Real X : Q.V)
 	{
-		Scale = std::max(Scale, std::fabs(X));
+		Scale = gm::max(Scale, gm::fabs(X));
 	}
 	// Modified Gram-Schmidt, columns in order.
 	for (int j = 0; j < Q.Cols; ++j)
 	{
 		for (int k = 0; k < j; ++k)
 		{
-			double D = 0.0;
+			Real D = 0.0;
 			for (int i = 0; i < Q.Rows; ++i)
 			{
 				D += Q(i, k) * Q(i, j);
@@ -1142,13 +1185,13 @@ Result GramSchmidt(const Call& C)
 				Q(i, j) -= D * Q(i, k);
 			}
 		}
-		double N = 0.0;
+		Real N = 0.0;
 		for (int i = 0; i < Q.Rows; ++i)
 		{
 			N += Q(i, j) * Q(i, j);
 		}
-		N = std::sqrt(N);
-		if (!(N > 1e-12 * std::max(1.0, Scale)))
+		N = gm::sqrt(N);
+		if (!(N > 1e-12 * gm::max(1.0, Scale)))
 		{
 			return Result::Fail("column " + std::to_string(j + 1) + " depends on the earlier columns");
 		}
@@ -1216,7 +1259,7 @@ Result Vander(const Call& C)
 	Matrix A(Xs.Count(), D + 1);
 	for (int i = 0; i < A.Rows; ++i)
 	{
-		double P = 1.0;
+		Real P = 1.0;
 		for (int j = 0; j <= D; ++j)
 		{
 			A(i, j) = P;
@@ -1248,9 +1291,9 @@ Result KfRw(const Call& C)
 	{
 		return Result::Fail(E);
 	}
-	const std::vector<double>& Ys = C.M(0).V;
-	const double Qn = C.N(1), Rn = C.N(2);
-	double Xh = 0.0, P = C.N(3);
+	const std::vector<Real>& Ys = C.M(0).V;
+	const Real Qn = C.N(1), Rn = C.N(2);
+	Real Xh = 0.0, P = C.N(3);
 	Matrix Out(1, static_cast<int>(Ys.size()));
 	for (size_t k = 0; k < Ys.size(); ++k)
 	{
@@ -1258,7 +1301,7 @@ Result KfRw(const Call& C)
 		{
 			P += Qn;
 		}
-		const double K = P / (P + Rn);
+		const Real K = P / (P + Rn);
 		Xh += K * (Ys[k] - Xh);
 		P *= 1 - K;
 		Out.V[k] = Xh;
@@ -1274,10 +1317,14 @@ Result SmoothRw(const Call& C)
 	{
 		return Result::Fail(E);
 	}
-	const std::vector<double>& Ys = C.M(0).V;
-	const double Qn = C.N(1), Rn = C.N(2), P0 = C.N(3);
+	const std::vector<Real>& Ys = C.M(0).V;
+	const Real Qn = C.N(1), Rn = C.N(2), P0 = C.N(3);
 	const size_t N = Ys.size();
-	std::vector<double> A(N, 0.0), B(N, 0.0), Cc(N, 0.0), D(N, 0.0), Cp(N), Dp(N), X(N);
+	if (N == 0)
+	{
+		return Result::Fail("y must not be empty");
+	}
+	std::vector<Real> A(N, 0.0), B(N, 0.0), Cc(N, 0.0), D(N, 0.0), Cp(N), Dp(N), X(N);
 	B[0] += 1 / P0;
 	for (size_t i = 1; i < N; ++i)
 	{
@@ -1295,7 +1342,7 @@ Result SmoothRw(const Call& C)
 	Dp[0] = D[0] / B[0];
 	for (size_t i = 1; i < N; ++i)
 	{
-		const double Den = B[i] - A[i] * Cp[i - 1];
+		const Real Den = B[i] - A[i] * Cp[i - 1];
 		Cp[i] = Cc[i] / Den;
 		Dp[i] = (D[i] - A[i] * Dp[i - 1]) / Den;
 	}
@@ -1307,9 +1354,9 @@ Result SmoothRw(const Call& C)
 	return Result::Of(Matrix::Row(X));
 }
 
-bool Ar1Args(double A, double Q, double R, std::string* Err)
+bool Ar1Args(Real A, Real Q, Real R, std::string* Err)
 {
-	if (!(std::fabs(A) < 1.0) || !(Q > 0.0) || !(R > 0.0))
+	if (!(gm::fabs(A) < 1.0) || !(Q > 0.0) || !(R > 0.0))
 	{
 		*Err = "needs |a| < 1 (stationary AR(1)), q > 0 and r > 0";
 		return false;
@@ -1318,54 +1365,54 @@ bool Ar1Args(double A, double Q, double R, std::string* Err)
 }
 
 // Steady-state prior variance of the scalar Kalman filter: the positive root of P^2 + (r(1-a^2) - q)P - qr = 0.
-double SteadyP(double A, double Q, double R)
+Real SteadyP(Real A, Real Q, Real R)
 {
-	const double Bq = R * (1 - A * A) - Q;
-	return 0.5 * (-Bq + std::sqrt(Bq * Bq + 4 * Q * R));
+	const Real Bq = R * (1 - A * A) - Q;
+	return 0.5 * (-Bq + gm::sqrt(Bq * Bq + 4 * Q * R));
 }
 
 Result KfSs(const Call& C)
 {
-	const double A = C.N(0), Q = C.N(1), R = C.N(2);
+	const Real A = C.N(0), Q = C.N(1), R = C.N(2);
 	std::string E;
 	if (!Ar1Args(A, Q, R, &E))
 	{
 		return Result::Fail(E);
 	}
-	const double P = SteadyP(A, Q, R);
+	const Real P = SteadyP(A, Q, R);
 	return Result::Record({{"P", P}, {"K", P / (P + R)}, {"Pp", P * R / (P + R)}});
 }
 
 // Non-causal Wiener MSE (1/pi) int_0^pi Ss r / (Ss + r) dw = q r / sqrt((q + r(1+a^2))^2 - 4 a^2 r^2).
 Result Wiener(const Call& C)
 {
-	const double A = C.N(0), Q = C.N(1), R = C.N(2);
+	const Real A = C.N(0), Q = C.N(1), R = C.N(2);
 	std::string E;
 	if (!Ar1Args(A, Q, R, &E))
 	{
 		return Result::Fail(E);
 	}
-	const double S = Q + R * (1 + A * A);
-	const double Nc = Q * R / std::sqrt(S * S - 4 * A * A * R * R);
-	const double P = SteadyP(A, Q, R), Pp = P * R / (P + R);
+	const Real S = Q + R * (1 + A * A);
+	const Real Nc = Q * R / gm::sqrt(S * S - 4 * A * A * R * R);
+	const Real P = SteadyP(A, Q, R), Pp = P * R / (P + R);
 	return Result::Record({{"nc", Nc}, {"causal", Pp}, {"price", Pp / Nc - 1}});
 }
 
-double SMagBode(double W, double K, double P)
+Real SMagBode(Real W, Real K, Real P)
 {
 	// L = k (s + 1) / ((s - p)(s + 3)(s + 4)) at s = jw; returns |1 / (1 + L)|.
-	const double Nr = K, Ni = K * W;                                  // k (1 + jw)
-	const double Ar = -P, Ai = W, Br = 3, Bi = W, Cr = 4, Ci = W;
-	const double ABr = Ar * Br - Ai * Bi, ABi = Ar * Bi + Ai * Br;
-	const double Dr = ABr * Cr - ABi * Ci, Di = ABr * Ci + ABi * Cr;  // (s-p)(s+3)(s+4)
-	const double Sr = Dr + Nr, Si = Di + Ni;                           // S = D / (D + N)
-	return std::hypot(Dr, Di) / std::hypot(Sr, Si);
+	const Real Nr = K, Ni = K * W;                                  // k (1 + jw)
+	const Real Ar = -P, Ai = W, Br = 3, Bi = W, Cr = 4, Ci = W;
+	const Real ABr = Ar * Br - Ai * Bi, ABi = Ar * Bi + Ai * Br;
+	const Real Dr = ABr * Cr - ABi * Ci, Di = ABr * Ci + ABi * Cr;  // (s-p)(s+3)(s+4)
+	const Real Sr = Dr + Nr, Si = Di + Ni;                           // S = D / (D + N)
+	return gm::hypot(Dr, Di) / gm::hypot(Sr, Si);
 }
 
 // Bode's sensitivity integral computed numerically (Gauss-Legendre in log frequency) beside pi * p.
 Result BodeInt(const Call& C)
 {
-	const double K = C.N(0), P = C.N(1);
+	const Real K = C.N(0), P = C.N(1);
 	if (!(K > 0.0))
 	{
 		return Result::Fail("gain k must be positive");
@@ -1377,27 +1424,27 @@ Result BodeInt(const Call& C)
 	Comp(0, 2) = -(K - 12 * P);
 	Comp(1, 0) = 1;
 	Comp(2, 1) = 1;
-	std::vector<double> Re, Im;
+	std::vector<Real> Re, Im;
 	std::string E;
 	if (!la::Eigenvalues(Comp, &Re, &Im, &E))
 	{
 		return Result::Fail(E);
 	}
 	const bool Stable = *std::max_element(Re.begin(), Re.end()) < 0.0;
-	static const double Gx[8] = {-0.9602898564975363, -0.7966664774136267, -0.5255324099163290, -0.1834346424956498, 0.1834346424956498, 0.5255324099163290, 0.7966664774136267, 0.9602898564975363};
-	static const double Gw[8] = {0.1012285362903763, 0.2223810344533745, 0.3137066538101824, 0.3626837833783620, 0.3626837833783620, 0.3137066538101824, 0.2223810344533745, 0.1012285362903763};
-	const double U0 = std::log(1e-12), U1 = std::log(1e8);
+	static const Real Gx[8] = {-0.9602898564975363, -0.7966664774136267, -0.5255324099163290, -0.1834346424956498, 0.1834346424956498, 0.5255324099163290, 0.7966664774136267, 0.9602898564975363};
+	static const Real Gw[8] = {0.1012285362903763, 0.2223810344533745, 0.3137066538101824, 0.3626837833783620, 0.3626837833783620, 0.3137066538101824, 0.2223810344533745, 0.1012285362903763};
+	const Real U0 = gm::log(1e-12), U1 = gm::log(1e8);
 	const int Panels = 1200;
-	const double Hp = (U1 - U0) / Panels;
-	double I = 0.0, Peak = 0.0, Wpk = 0.0;
+	const Real Hp = (U1 - U0) / Panels;
+	Real I = 0.0, Peak = 0.0, Wpk = 0.0;
 	for (int p = 0; p < Panels; ++p)
 	{
-		const double Mid = U0 + (p + 0.5) * Hp;
+		const Real Mid = U0 + (p + 0.5) * Hp;
 		for (int g = 0; g < 8; ++g)
 		{
-			const double W = std::exp(Mid + 0.5 * Hp * Gx[g]);
-			const double Sm = SMagBode(W, K, P);
-			I += 0.5 * Hp * Gw[g] * std::log(Sm) * W;
+			const Real W = gm::exp(Mid + 0.5 * Hp * Gx[g]);
+			const Real Sm = SMagBode(W, K, P);
+			I += 0.5 * Hp * Gw[g] * gm::log(Sm) * W;
 			if (Sm > Peak)
 			{
 				Peak = Sm;
@@ -1405,13 +1452,13 @@ Result BodeInt(const Call& C)
 			}
 		}
 	}
-	I += K / std::exp(U1);   // tail: ln|S| ~ k / w^2 beyond the last panel
+	I += K / gm::exp(U1);   // tail: ln|S| ~ k / w^2 beyond the last panel
 	// Refine the peak by golden-section search around the best sample.
-	double Lo = Wpk * std::exp(-2 * Hp), Hi = Wpk * std::exp(2 * Hp);
-	const double Gr = 0.5 * (std::sqrt(5.0) - 1.0);
+	Real Lo = Wpk * gm::exp(-2 * Hp), Hi = Wpk * gm::exp(2 * Hp);
+	const Real Gr = 0.5 * (gm::sqrt(5.0) - 1.0);
 	for (int it = 0; it < 100; ++it)
 	{
-		const double A1 = Hi - Gr * (Hi - Lo), A2 = Lo + Gr * (Hi - Lo);
+		const Real A1 = Hi - Gr * (Hi - Lo), A2 = Lo + Gr * (Hi - Lo);
 		if (SMagBode(A1, K, P) > SMagBode(A2, K, P))
 		{
 			Hi = A2;
@@ -1422,8 +1469,8 @@ Result BodeInt(const Call& C)
 		}
 	}
 	Wpk = 0.5 * (Lo + Hi);
-	Peak = std::max(Peak, SMagBode(Wpk, K, P));
-	return Result::Record({{"integral", I}, {"theorem", cst::Pi * std::max(P, 0.0)}, {"peak", Peak}, {"wpeak", Wpk}, {"stable", Stable ? 1.0 : 0.0}});
+	Peak = gm::max(Peak, SMagBode(Wpk, K, P));
+	return Result::Record({{"integral", I}, {"theorem", cst::Pi() * gm::max(P, 0.0)}, {"peak", Peak}, {"wpeak", Wpk}, {"stable", Stable ? 1.0 : 0.0}});
 }
 
 // Posterior mean of x ~ N(0, 4) from measurements with N(0,1)/N(0,100) mixture noise (801-point grid),
@@ -1431,7 +1478,7 @@ Result BodeInt(const Call& C)
 Result PostMean(const Call& C)
 {
 	const Matrix& Y = C.M(0);
-	const double Eps = C.N(1);
+	const Real Eps = C.N(1);
 	if (!(Y.IsVector() || Y.IsScalar()))
 	{
 		return Result::Fail("y must be a vector of measurements");
@@ -1441,47 +1488,47 @@ Result PostMean(const Call& C)
 		return Result::Fail("outlier rate eps must be in [0, 1]");
 	}
 	const int G = 801;
-	std::vector<double> Lp(G);
-	double Best = -AtlasInf;
+	std::vector<Real> Lp(G);
+	Real Best = -Real::Infinity();
 	for (int i = 0; i < G; ++i)
 	{
-		const double X = -10 + 20.0 * i / 800;
-		double S = -X * X / 8;
-		for (double Yk : Y.V)
+		const Real X = -10 + Real(20 * i) / 800;
+		Real S = -X * X / 8;
+		for (Real Yk : Y.V)
 		{
-			const double D = Yk - X;
-			S += std::log((1 - Eps) * std::exp(-D * D / 2) + Eps * std::exp(-D * D / 200) / 10 + 1e-300);
+			const Real D = Yk - X;
+			S += gm::log((1 - Eps) * gm::exp(-D * D / 2) + Eps * gm::exp(-D * D / 200) / 10 + 1e-300);
 		}
 		Lp[static_cast<size_t>(i)] = S;
-		Best = std::max(Best, S);
+		Best = gm::max(Best, S);
 	}
-	double Sw = 0, Sx = 0;
+	Real Sw = 0, Sx = 0;
 	for (int i = 0; i < G; ++i)
 	{
-		const double Wt = std::exp(Lp[static_cast<size_t>(i)] - Best);
+		const Real Wt = gm::exp(Lp[static_cast<size_t>(i)] - Best);
 		Sw += Wt;
-		Sx += Wt * (-10 + 20.0 * i / 800);
+		Sx += Wt * (-10 + Real(20 * i) / 800);
 	}
-	double Sum = 0;
-	for (double Yk : Y.V)
+	Real Sum = 0;
+	for (Real Yk : Y.V)
 	{
 		Sum += Yk;
 	}
-	const double Vv = (1 - Eps) + Eps * 100;
-	const double Lin = (Sum / Vv) / (0.25 + static_cast<double>(Y.Count()) / Vv);
-	return Result::Record({{"post", Sx / Sw}, {"lin", Lin}, {"linmse", 1 / (0.25 + static_cast<double>(Y.Count()) / Vv)}});
+	const Real Vv = (1 - Eps) + Eps * 100;
+	const Real Lin = (Sum / Vv) / (0.25 + Real(Y.Count()) / Vv);
+	return Result::Record({{"post", Sx / Sw}, {"lin", Lin}, {"linmse", 1 / (0.25 + Real(Y.Count()) / Vv)}});
 }
 
 // ---------------------------------------------------------------- ch05 measure
 
 Result Bayes(const Call& C)
 {
-	const double M = C.N(0), P = C.N(1), Y = C.N(2), R = C.N(3), H = C.N(4);
+	const Real M = C.N(0), P = C.N(1), Y = C.N(2), R = C.N(3), H = C.N(4);
 	if (!(P >= 0.0) || !(R > 0.0))
 	{
 		return Result::Fail("needs prior variance P >= 0 and noise variance R > 0");
 	}
-	const double K = P * H / (H * H * P + R);
+	const Real K = P * H / (H * H * P + R);
 	return Result::Record({{"m", M + K * (Y - H * M)}, {"P", (1 - K * H) * P}, {"K", K}});
 }
 
@@ -1543,34 +1590,47 @@ Result BayesCov(const Call& C)
 
 Result BkDensity(const Call& C)
 {
-	const double T = C.N(0);
-	return Result::Record({{"band", std::fabs(T) <= cst::Pi ? 1.0 / (2 * cst::Pi) : 0.0}, {"wedge", std::fabs(T) <= 0.5 * cst::Pi ? 0.5 * std::cos(T) : 0.0}});
+	const Real T = C.N(0);
+	return Result::Record({{"band", gm::fabs(T) <= cst::Pi() ? 1.0 / (2 * cst::Pi()) : 0.0}, {"wedge", gm::fabs(T) <= 0.5 * cst::Pi() ? 0.5 * gm::cos(T) : 0.0}});
 }
 
 // p = N(0,1), q = N(0, s^2): E_q[w^2] = s^2 / sqrt(2 s^2 - 1), infinite for s^2 <= 1/2.
 Result IsW2(const Call& C)
 {
-	const double S = C.N(0);
+	const Real S = C.N(0);
 	if (!(S > 0.0))
 	{
 		return Result::Fail("proposal sd s must be positive");
 	}
 	if (2 * S * S - 1 <= 0.0)
 	{
-		return Result::Record({{"w2", AtlasInf}, {"ess", 0.0}, {"fvar", AtlasInf}});
+		return Result::Record({{"w2", Real::Infinity()}, {"ess", 0.0}, {"fvar", Real::Infinity()}});
 	}
-	const double W2 = S * S / std::sqrt(2 * S * S - 1);
-	const double V = S * S / (2 * S * S - 1);   // variance of the Gaussian p^2/q, normalized
+	const Real W2 = S * S / gm::sqrt(2 * S * S - 1);
+	const Real V = S * S / (2 * S * S - 1);   // variance of the Gaussian p^2/q, normalized
 	return Result::Record({{"w2", W2}, {"ess", 1 / W2}, {"fvar", 3 * W2 * V * V - 1}});
 }
 
-double RadInv(long long I, long long B)
+// Radical inverse: the base-B digits of I reversed behind the point. While B^digits fits in 18
+// decimal digits the reversed digits are an exact integer ratio and one division gives the value.
+Real RadInv(long long I, long long B)
 {
-	double F = 1, R = 0;
+	long long Num = 0, Den = 1, J = I;
+	while (J > 0 && Den <= 1000000000000000000ll / B)
+	{
+		Num = Num * B + J % B;
+		Den *= B;
+		J /= B;
+	}
+	if (J == 0)
+	{
+		return Real(Num) / Real(Den);
+	}
+	Real F = 1, R = 0;
 	while (I > 0)
 	{
-		F /= static_cast<double>(B);
-		R += F * static_cast<double>(I % B);
+		F /= Real(B);
+		R += F * Real(I % B);
 		I /= B;
 	}
 	return R;
@@ -1580,12 +1640,12 @@ const long long AtlasPrimes[16] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 4
 
 Result Vdc(const Call& C)
 {
-	const double I = C.N(0), B = C.N(1);
-	if (!(I >= 0 && I == std::floor(I) && I < 9e15) || !(B >= 2 && B == std::floor(B) && B <= 1e6))
+	const Real I = C.N(0), B = C.N(1);
+	if (!(I >= 0 && I == gm::floor(I) && I < 9e15) || !(B >= 2 && B == gm::floor(B) && B <= 1e6))
 	{
 		return Result::Fail("needs a whole index i >= 0 and a whole base b >= 2");
 	}
-	return Result::Of(RadInv(static_cast<long long>(I), static_cast<long long>(B)));
+	return Result::Of(RadInv(I.ToLong(), B.ToLong()));
 }
 
 Result Halton(const Call& C)
@@ -1610,44 +1670,43 @@ Result Halton(const Call& C)
 Result QmcErr(const Call& C)
 {
 	const int N = C.Int(0), D = C.Int(1), Kind = C.Int(2);
-	if (N < 1 || N > 200000 || D < 1 || D > 16 || N * D > 400000 || (Kind != 0 && Kind != 1))
+	if (N < 1 || N > 100000 || D < 1 || D > 16 || N * D > 100000 || (Kind != 0 && Kind != 1))
 	{
-		return Result::Fail("N 1..200000, d 1..16 (N d <= 400000), kind 1 = smooth product of sines, 0 = indicator of sum < d/2");
+		return Result::Fail("N 1..100000, d 1..16 (N d <= 100000), kind 1 = smooth product of sines, 0 = indicator of sum < d/2");
 	}
-	double Acc = 0;
-	std::vector<double> X(static_cast<size_t>(D));
+	const Real& Pi = cst::Pi();
+	const Real Half = Real(D) / 2, Scale = gm::powi(Pi / 2, D);
+	RealAccumulator Acc;   // the 8192-term sum is kept in the accumulator and read off once
+	long long Inside = 0;
 	for (int i = 1; i <= N; ++i)
 	{
-		for (int j = 0; j < D; ++j)
-		{
-			X[static_cast<size_t>(j)] = RadInv(i, AtlasPrimes[j]);
-		}
 		if (Kind == 1)
 		{
-			double P = 1;
-			for (double Xj : X)
+			Real P = Scale;
+			for (int j = 0; j < D; ++j)
 			{
-				P *= cst::Pi / 2 * std::sin(cst::Pi * Xj);
+				P *= gm::sin(Pi * RadInv(i, AtlasPrimes[j]));
 			}
-			Acc += P;
+			Acc.Add(P);
 		}
 		else
 		{
-			double S = 0;
-			for (double Xj : X)
+			Real S = 0;
+			for (int j = 0; j < D; ++j)
 			{
-				S += Xj;
+				S += RadInv(i, AtlasPrimes[j]);
 			}
-			Acc += S < D / 2.0 ? 1 : 0;
+			Inside += S < Half ? 1 : 0;
 		}
 	}
-	return Result::Of(std::fabs(Acc / N - (Kind == 1 ? 1.0 : 0.5)));
+	const Real Mean = Kind == 1 ? Acc.Result() / N : Real(Inside) / N;
+	return Result::Of(gm::fabs(Mean - (Kind == 1 ? Real(1) : Real(0.5))));
 }
 
 Result Ess(const Call& C)
 {
-	double S = 0, S2 = 0;
-	for (double W : C.M(0).V)
+	Real S = 0, S2 = 0;
+	for (Real W : C.M(0).V)
 	{
 		if (!(W >= 0.0))
 		{
@@ -1663,19 +1722,19 @@ Result Ess(const Call& C)
 	return Result::Of(S * S / S2);
 }
 
-double LogZ(const std::vector<double>& E)
+Real LogZ(const std::vector<Real>& E)
 {
-	double Lo = AtlasInf;
-	for (double X : E)
+	Real Lo = Real::Infinity();
+	for (Real X : E)
 	{
-		Lo = std::min(Lo, X);
+		Lo = gm::min(Lo, X);
 	}
-	double S = 0;
-	for (double X : E)
+	Real S = 0;
+	for (Real X : E)
 	{
-		S += std::exp(-(X - Lo));
+		S += gm::exp(-(X - Lo));
 	}
-	return -Lo + std::log(S);
+	return -Lo + gm::log(S);
 }
 
 Result LogZFn(const Call& C)
@@ -1694,18 +1753,18 @@ Result Boltz(const Call& C)
 		return Result::Fail("needs energies");
 	}
 	Matrix Q = C.M(0);
-	const double Lz = LogZ(Q.V);
-	for (double& X : Q.V)
+	const Real Lz = LogZ(Q.V);
+	for (Real& X : Q.V)
 	{
-		X = std::exp(-X - Lz);
+		X = gm::exp(-X - Lz);
 	}
 	return Result::Of(Q);
 }
 
-bool Distribution(const Matrix& M, std::vector<double>* Out, std::string* Err)
+bool Distribution(const Matrix& M, std::vector<Real>* Out, std::string* Err)
 {
-	double S = 0;
-	for (double X : M.V)
+	Real S = 0;
+	for (Real X : M.V)
 	{
 		if (!(X >= 0.0))
 		{
@@ -1719,7 +1778,7 @@ bool Distribution(const Matrix& M, std::vector<double>* Out, std::string* Err)
 		*Err = "probabilities sum to zero";
 		return false;
 	}
-	for (double X : M.V)
+	for (Real X : M.V)
 	{
 		Out->push_back(X / S);
 	}
@@ -1729,7 +1788,7 @@ bool Distribution(const Matrix& M, std::vector<double>* Out, std::string* Err)
 // Gibbs functional -E_q[E] + H(q); its maximum over q is log Z, attained at the Boltzmann distribution.
 Result GibbsF(const Call& C)
 {
-	std::vector<double> Q;
+	std::vector<Real> Q;
 	std::string Er;
 	if (!Distribution(C.M(0), &Q, &Er))
 	{
@@ -1739,13 +1798,13 @@ Result GibbsF(const Call& C)
 	{
 		return Result::Fail("q and E must have the same length");
 	}
-	double F = 0;
+	Real F = 0;
 	for (size_t i = 0; i < Q.size(); ++i)
 	{
 		F -= Q[i] * C.M(1).V[i];
 		if (Q[i] > 0)
 		{
-			F -= Q[i] * std::log(Q[i]);
+			F -= Q[i] * gm::log(Q[i]);
 		}
 	}
 	return Result::Of(F);
@@ -1753,7 +1812,7 @@ Result GibbsF(const Call& C)
 
 Result Kl(const Call& C)
 {
-	std::vector<double> P, Q;
+	std::vector<Real> P, Q;
 	std::string Er;
 	if (!Distribution(C.M(0), &P, &Er) || !Distribution(C.M(1), &Q, &Er))
 	{
@@ -1763,16 +1822,16 @@ Result Kl(const Call& C)
 	{
 		return Result::Fail("p and q must have the same length");
 	}
-	double D = 0;
+	Real D = 0;
 	for (size_t i = 0; i < P.size(); ++i)
 	{
 		if (P[i] > 0)
 		{
 			if (Q[i] == 0)
 			{
-				return Result::Of(AtlasInf);
+				return Result::Of(Real::Infinity());
 			}
-			D += P[i] * std::log(P[i] / Q[i]);
+			D += P[i] * gm::log(P[i] / Q[i]);
 		}
 	}
 	return Result::Of(D);
@@ -1784,8 +1843,8 @@ Result Kl(const Call& C)
 // Dual prices y >= 0 satisfy c + A'y >= 0 and c'x* = -b'y*; y_i = -d(c'x*)/d(b_i).
 struct LpSolution
 {
-	std::vector<double> X, Y;
-	double Value = 0;
+	std::vector<Real> X, Y;
+	Real Value = 0;
 };
 
 bool SolveLp(const Matrix& Cm, const Matrix& A, const Matrix& Bm, LpSolution* Out, std::string* Err)
@@ -1817,7 +1876,7 @@ bool SolveLp(const Matrix& Cm, const Matrix& A, const Matrix& Bm, LpSolution* Ou
 	for (int i = 0; i < M; ++i)
 	{
 		const bool Flip = Bm.V[static_cast<size_t>(i)] < 0;
-		const double Sg = Flip ? -1.0 : 1.0;
+		const Real Sg = Flip ? -1.0 : 1.0;
 		for (int j = 0; j < N; ++j)
 		{
 			T(i, j) = Sg * A(i, j);
@@ -1836,7 +1895,7 @@ bool SolveLp(const Matrix& Cm, const Matrix& A, const Matrix& Bm, LpSolution* Ou
 		}
 	}
 	auto Pivot = [&T, &Basis, M, Cols](int Pr, int Pc) {
-		const double Pv = T(Pr, Pc);
+		const Real Pv = T(Pr, Pc);
 		for (int j = 0; j <= Cols; ++j)
 		{
 			T(Pr, j) /= Pv;
@@ -1845,7 +1904,7 @@ bool SolveLp(const Matrix& Cm, const Matrix& A, const Matrix& Bm, LpSolution* Ou
 		{
 			if (i != Pr && T(i, Pc) != 0.0)
 			{
-				const double F = T(i, Pc);
+				const Real F = T(i, Pc);
 				for (int j = 0; j <= Cols; ++j)
 				{
 					T(i, j) -= F * T(Pr, j);
@@ -1854,7 +1913,7 @@ bool SolveLp(const Matrix& Cm, const Matrix& A, const Matrix& Bm, LpSolution* Ou
 		}
 		Basis[static_cast<size_t>(Pr)] = Pc;
 	};
-	const double Tol = 1e-11;
+	const Real Tol = 1e-11;
 	// Runs simplex on the objective row; columns >= Allowed may not enter. Returns 0 ok, 1 unbounded.
 	auto Run = [&T, &Basis, &Pivot, M, Tol, Cols](int Allowed) {
 		for (int Iter = 0; Iter < 5000; ++Iter)
@@ -1873,13 +1932,13 @@ bool SolveLp(const Matrix& Cm, const Matrix& A, const Matrix& Bm, LpSolution* Ou
 				return 0;
 			}
 			int Pr = -1;
-			double BestRatio = 0;
+			Real BestRatio = 0;
 			for (int i = 0; i < M; ++i)
 			{
 				if (T(i, Pc) > Tol)
 				{
-					const double Ratio = T(i, Cols) / T(i, Pc);
-					if (Pr < 0 || Ratio < BestRatio - 1e-13 || (std::fabs(Ratio - BestRatio) <= 1e-13 && Basis[static_cast<size_t>(i)] < Basis[static_cast<size_t>(Pr)]))
+					const Real Ratio = T(i, Cols) / T(i, Pc);
+					if (Pr < 0 || Ratio < BestRatio - 1e-13 || (gm::fabs(Ratio - BestRatio) <= 1e-13 && Basis[static_cast<size_t>(i)] < Basis[static_cast<size_t>(Pr)]))
 					{
 						Pr = i;
 						BestRatio = Ratio;
@@ -1910,7 +1969,7 @@ bool SolveLp(const Matrix& Cm, const Matrix& A, const Matrix& Bm, LpSolution* Ou
 			}
 			T(M, N + M + k) = 0.0;
 		}
-		if (Run(Cols) != 0 || -T(M, Cols) > 1e-9 * std::max(1.0, la::MaxAbs(Bm)))
+		if (Run(Cols) != 0 || -T(M, Cols) > 1e-9 * gm::max(1.0, la::MaxAbs(Bm)))
 		{
 			*Err = "infeasible: no x >= 0 satisfies A x <= b";
 			return false;
@@ -1922,7 +1981,7 @@ bool SolveLp(const Matrix& Cm, const Matrix& A, const Matrix& Bm, LpSolution* Ou
 			{
 				for (int j = 0; j < N + M; ++j)
 				{
-					if (std::fabs(T(i, j)) > 1e-9)
+					if (gm::fabs(T(i, j)) > 1e-9)
 					{
 						Pivot(i, j);
 						break;
@@ -1939,7 +1998,7 @@ bool SolveLp(const Matrix& Cm, const Matrix& A, const Matrix& Bm, LpSolution* Ou
 	for (int i = 0; i < M; ++i)
 	{
 		const int Bj = Basis[static_cast<size_t>(i)];
-		const double Cb = Bj < N ? Cm.V[static_cast<size_t>(Bj)] : 0.0;
+		const Real Cb = Bj < N ? Cm.V[static_cast<size_t>(Bj)] : 0.0;
 		if (Cb != 0.0)
 		{
 			for (int j = 0; j <= Cols; ++j)
@@ -1971,7 +2030,7 @@ bool SolveLp(const Matrix& Cm, const Matrix& A, const Matrix& Bm, LpSolution* Ou
 	Out->Y.assign(static_cast<size_t>(M), 0.0);
 	for (int i = 0; i < M; ++i)
 	{
-		Out->Y[static_cast<size_t>(i)] = std::max(0.0, T(M, N + i));   // reduced cost of slack i
+		Out->Y[static_cast<size_t>(i)] = gm::max(0.0, T(M, N + i));   // reduced cost of slack i
 	}
 	Out->Value = 0;
 	for (int j = 0; j < N; ++j)
@@ -2023,47 +2082,47 @@ Result LpKkt(const Call& C)
 	{
 		return Result::Fail("shapes: c and x have n entries, A is m x n, b and y have m entries");
 	}
-	double Primal = 0, Dual = 0, Slack = 0, Gap = 0;
+	Real Primal = 0, Dual = 0, Slack = 0, Gap = 0;
 	for (int i = 0; i < M; ++i)
 	{
-		double Ax = 0;
+		Real Ax = 0;
 		for (int j = 0; j < N; ++j)
 		{
 			Ax += A(i, j) * X.V[static_cast<size_t>(j)];
 		}
-		const double Yi = Y.V[static_cast<size_t>(i)];
-		Primal = std::max(Primal, Ax - B.V[static_cast<size_t>(i)]);
-		Dual = std::max(Dual, -Yi);
-		Slack = std::max(Slack, std::fabs(Yi * (B.V[static_cast<size_t>(i)] - Ax)));
+		const Real Yi = Y.V[static_cast<size_t>(i)];
+		Primal = gm::max(Primal, Ax - B.V[static_cast<size_t>(i)]);
+		Dual = gm::max(Dual, -Yi);
+		Slack = gm::max(Slack, gm::fabs(Yi * (B.V[static_cast<size_t>(i)] - Ax)));
 		Gap += B.V[static_cast<size_t>(i)] * Yi;
 	}
 	for (int j = 0; j < N; ++j)
 	{
-		double Mu = Cm.V[static_cast<size_t>(j)];
+		Real Mu = Cm.V[static_cast<size_t>(j)];
 		for (int i = 0; i < M; ++i)
 		{
 			Mu += A(i, j) * Y.V[static_cast<size_t>(i)];
 		}
-		const double Xj = X.V[static_cast<size_t>(j)];
-		Primal = std::max(Primal, -Xj);
-		Dual = std::max(Dual, -Mu);
-		Slack = std::max(Slack, std::fabs(Xj * Mu));
+		const Real Xj = X.V[static_cast<size_t>(j)];
+		Primal = gm::max(Primal, -Xj);
+		Dual = gm::max(Dual, -Mu);
+		Slack = gm::max(Slack, gm::fabs(Xj * Mu));
 		Gap += Cm.V[static_cast<size_t>(j)] * Xj;
 	}
 	return Result::Record({{"primal", Primal}, {"dual", Dual}, {"slack", Slack}, {"gap", Gap}});
 }
 
-double SoftT(double V, double K) { return V > K ? V - K : (V < -K ? V + K : 0.0); }
+Real SoftT(Real V, Real K) { return V > K ? V - K : (V < -K ? V + K : 0.0); }
 
 Result Soft(const Call& C)
 {
-	const double K = C.N(1);
+	const Real K = C.N(1);
 	if (!(K >= 0.0))
 	{
 		return Result::Fail("threshold t must be >= 0");
 	}
 	Matrix M = C.M(0);
-	for (double& X : M.V)
+	for (Real& X : M.V)
 	{
 		X = SoftT(X, K);
 	}
@@ -2075,7 +2134,7 @@ Result Lasso(const Call& C)
 {
 	const Matrix& A = C.M(0);
 	Matrix B;
-	const double Lam = C.N(2);
+	const Real Lam = C.N(2);
 	if (A.IsEmpty() || !AsColumn(C.M(1), A.Rows, &B))
 	{
 		return Result::Fail("b must have one entry per row of A");
@@ -2089,7 +2148,7 @@ Result Lasso(const Call& C)
 		return Result::Fail("at most 4000 entries in A");
 	}
 	const int M = A.Rows, N = A.Cols;
-	std::vector<double> X(static_cast<size_t>(N), 0.0), Res(B.V), Col2(static_cast<size_t>(N), 0.0);
+	std::vector<Real> X(static_cast<size_t>(N), 0.0), Res(B.V), Col2(static_cast<size_t>(N), 0.0);
 	for (int j = 0; j < N; ++j)
 	{
 		for (int i = 0; i < M; ++i)
@@ -2103,18 +2162,18 @@ Result Lasso(const Call& C)
 	}
 	for (int Sweep = 0; Sweep < 20000; ++Sweep)
 	{
-		double Change = 0, Scale = 0;
+		Real Change = 0, Scale = 0;
 		for (int j = 0; j < N; ++j)
 		{
-			double Rho = 0;
+			Real Rho = 0;
 			const size_t J = static_cast<size_t>(j);
 			for (int i = 0; i < M; ++i)
 			{
 				Rho += A(i, j) * Res[static_cast<size_t>(i)];
 			}
 			Rho += Col2[J] * X[J];
-			const double Xn = SoftT(Rho, Lam) / Col2[J];
-			const double D = Xn - X[J];
+			const Real Xn = SoftT(Rho, Lam) / Col2[J];
+			const Real D = Xn - X[J];
 			if (D != 0.0)
 			{
 				for (int i = 0; i < M; ++i)
@@ -2123,10 +2182,10 @@ Result Lasso(const Call& C)
 				}
 			}
 			X[J] = Xn;
-			Change = std::max(Change, std::fabs(D));
-			Scale = std::max(Scale, std::fabs(Xn));
+			Change = gm::max(Change, gm::fabs(D));
+			Scale = gm::max(Scale, gm::fabs(Xn));
 		}
-		if (Change <= 1e-15 * std::max(1.0, Scale))
+		if (Change <= 1e-15 * gm::max(1.0, Scale))
 		{
 			break;
 		}
@@ -2211,24 +2270,24 @@ Result LqCost(const Call& C)
 }
 
 // Real roots of c3 x^3 + c2 x^2 + c1 x + c0 (c3 may be zero), polished by Newton.
-std::vector<double> RealRootsCubic(double C3, double C2, double C1, double C0)
+std::vector<Real> RealRootsCubic(Real C3, Real C2, Real C1, Real C0)
 {
-	std::vector<double> Out;
-	if (std::fabs(C3) < 1e-300)
+	std::vector<Real> Out;
+	if (gm::fabs(C3) < 1e-300)
 	{
-		if (std::fabs(C2) < 1e-300)
+		if (gm::fabs(C2) < 1e-300)
 		{
-			if (std::fabs(C1) > 0)
+			if (gm::fabs(C1) > 0)
 			{
 				Out.push_back(-C0 / C1);
 			}
 			return Out;
 		}
-		const double Disc = C1 * C1 - 4 * C2 * C0;
+		const Real Disc = C1 * C1 - 4 * C2 * C0;
 		if (Disc >= 0)
 		{
-			Out.push_back((-C1 + std::sqrt(Disc)) / (2 * C2));
-			Out.push_back((-C1 - std::sqrt(Disc)) / (2 * C2));
+			Out.push_back((-C1 + gm::sqrt(Disc)) / (2 * C2));
+			Out.push_back((-C1 - gm::sqrt(Disc)) / (2 * C2));
 		}
 		return Out;
 	}
@@ -2238,7 +2297,7 @@ std::vector<double> RealRootsCubic(double C3, double C2, double C1, double C0)
 	Comp(0, 2) = -C0 / C3;
 	Comp(1, 0) = 1;
 	Comp(2, 1) = 1;
-	std::vector<double> Re, Im;
+	std::vector<Real> Re, Im;
 	std::string E;
 	if (!la::Eigenvalues(Comp, &Re, &Im, &E))
 	{
@@ -2246,12 +2305,12 @@ std::vector<double> RealRootsCubic(double C3, double C2, double C1, double C0)
 	}
 	for (size_t i = 0; i < Re.size(); ++i)
 	{
-		if (std::fabs(Im[i]) < 1e-7 * std::max(1.0, std::fabs(Re[i])))
+		if (gm::fabs(Im[i]) < 1e-7 * gm::max(1.0, gm::fabs(Re[i])))
 		{
-			double X = Re[i];
+			Real X = Re[i];
 			for (int it = 0; it < 6; ++it)
 			{
-				const double F = ((C3 * X + C2) * X + C1) * X + C0, D = (3 * C3 * X + 2 * C2) * X + C1;
+				const Real F = ((C3 * X + C2) * X + C1) * X + C0, D = (3 * C3 * X + 2 * C2) * X + C1;
 				if (D == 0)
 				{
 					break;
@@ -2264,56 +2323,56 @@ std::vector<double> RealRootsCubic(double C3, double C2, double C1, double C0)
 	return Out;
 }
 
-double GapF(double A, double X) { return (1 - A) * (X - 1) * (X - 1) + A * ((X * X - 1) * (X * X - 1) - X / 2); }
+Real GapF(Real A, Real X) { return (1 - A) * (X - 1) * (X - 1) + A * ((X * X - 1) * (X * X - 1) - X / 2); }
 
 // g(lambda) = min_x f_a(x) + lambda x over all real x.
-double GapDualFn(double A, double Lam)
+Real GapDualFn(Real A, Real Lam)
 {
 	// f' + lambda = 4a x^3 + (2(1-a) - 4a) x - 2(1-a) - a/2 + lambda
-	const std::vector<double> Rts = RealRootsCubic(4 * A, 0.0, 2 * (1 - A) - 4 * A, -2 * (1 - A) - A / 2 + Lam);
-	double G = AtlasInf;
-	for (double X : Rts)
+	const std::vector<Real> Rts = RealRootsCubic(4 * A, 0.0, 2 * (1 - A) - 4 * A, -2 * (1 - A) - A / 2 + Lam);
+	Real G = Real::Infinity();
+	for (Real X : Rts)
 	{
-		G = std::min(G, GapF(A, X) + Lam * X);
+		G = gm::min(G, GapF(A, X) + Lam * X);
 	}
 	return G;
 }
 
-// Ch06 counterexample: min f_a(x) s.t. x <= 0, with Slater holding; the gap opens with the double well.
+// Ch06 counterexample: min f_a(x) s.t. x <= 0, with Slater holding; the gap opens with the Real well.
 Result DualGap(const Call& C)
 {
-	const double A = C.N(0);
+	const Real A = C.N(0);
 	if (!(A >= 0.0 && A <= 1.0))
 	{
 		return Result::Fail("nonconvexity a must be in [0, 1]");
 	}
-	double Pstar = GapF(A, 0.0);
-	for (double X : RealRootsCubic(4 * A, 0.0, 2 * (1 - A) - 4 * A, -2 * (1 - A) - A / 2))
+	Real Pstar = GapF(A, 0.0);
+	for (Real X : RealRootsCubic(4 * A, 0.0, 2 * (1 - A) - 4 * A, -2 * (1 - A) - A / 2))
 	{
 		if (X <= 0.0)
 		{
-			Pstar = std::min(Pstar, GapF(A, X));
+			Pstar = gm::min(Pstar, GapF(A, X));
 		}
 	}
 	// g is concave: scan a grid for the bracket, then golden-section search.
 	const int Ng = 400;
-	const double LamMax = 20.0;
+	const Real LamMax = 20.0;
 	int Best = 0;
-	double Gbest = -AtlasInf;
+	Real Gbest = -Real::Infinity();
 	for (int i = 0; i <= Ng; ++i)
 	{
-		const double G = GapDualFn(A, LamMax * i / Ng);
+		const Real G = GapDualFn(A, LamMax * i / Ng);
 		if (G > Gbest)
 		{
 			Gbest = G;
 			Best = i;
 		}
 	}
-	double Lo = LamMax * std::max(0, Best - 1) / Ng, Hi = LamMax * std::min(Ng, Best + 1) / Ng;
-	const double Gr = 0.5 * (std::sqrt(5.0) - 1.0);
+	Real Lo = LamMax * std::max(0, Best - 1) / Ng, Hi = LamMax * std::min(Ng, Best + 1) / Ng;
+	const Real Gr = 0.5 * (gm::sqrt(5.0) - 1.0);
 	for (int it = 0; it < 200; ++it)
 	{
-		const double L1 = Hi - Gr * (Hi - Lo), L2 = Lo + Gr * (Hi - Lo);
+		const Real L1 = Hi - Gr * (Hi - Lo), L2 = Lo + Gr * (Hi - Lo);
 		if (GapDualFn(A, L1) < GapDualFn(A, L2))
 		{
 			Lo = L1;
@@ -2323,7 +2382,7 @@ Result DualGap(const Call& C)
 			Hi = L2;
 		}
 	}
-	const double Dstar = std::max(Gbest, GapDualFn(A, 0.5 * (Lo + Hi)));
+	const Real Dstar = gm::max(Gbest, GapDualFn(A, 0.5 * (Lo + Hi)));
 	return Result::Record({{"p", Pstar}, {"d", Dstar}, {"gap", Pstar - Dstar}, {"lambda", 0.5 * (Lo + Hi)}});
 }
 
@@ -2331,7 +2390,7 @@ Result DualGap(const Call& C)
 Result Auction(const Call& C)
 {
 	const Matrix& A = C.M(0);
-	const double Eps = C.N(1);
+	const Real Eps = C.N(1);
 	if (!A.IsSquare() || A.Rows > 50)
 	{
 		return Result::Fail("benefits must be a square n x n matrix, n <= 50");
@@ -2341,7 +2400,7 @@ Result Auction(const Call& C)
 		return Result::Fail("bid increment eps must be positive");
 	}
 	const int N = A.Rows;
-	std::vector<double> Price(static_cast<size_t>(N), 0.0);
+	std::vector<Real> Price(static_cast<size_t>(N), 0.0);
 	std::vector<int> Owner(static_cast<size_t>(N), -1), Assign(static_cast<size_t>(N), -1), Queue;
 	for (int i = 0; i < N; ++i)
 	{
@@ -2364,13 +2423,13 @@ Result Auction(const Call& C)
 				J = j;
 			}
 		}
-		const double V1 = A(I, J) - Price[static_cast<size_t>(J)];
-		double V2 = -AtlasInf;
+		const Real V1 = A(I, J) - Price[static_cast<size_t>(J)];
+		Real V2 = -Real::Infinity();
 		for (int j = 0; j < N; ++j)
 		{
 			if (j != J)
 			{
-				V2 = std::max(V2, A(I, j) - Price[static_cast<size_t>(j)]);
+				V2 = gm::max(V2, A(I, j) - Price[static_cast<size_t>(j)]);
 			}
 		}
 		if (N == 1)
@@ -2399,7 +2458,7 @@ Result Auction(const Call& C)
 void RegisterAtlasLibrary(Registry& R)
 {
 	using namespace atlas_detail;
-	const double D2R = cst::Pi / 180.0;
+	const Real D2R = cst::Pi() / 180.0;
 
 	// ch01 groups
 	const char* G = "groups";
@@ -2409,12 +2468,12 @@ void RegisterAtlasLibrary(Registry& R)
 	Def(R, "exp_so3", G, "ch01 groups, definitions: exponential map", "rotation from a rotation vector w = theta n", "3 x 3 rotation", {Mat("w", "rad")}, &ExpSo3);
 	Def(R, "log_so3", G, "ch01 groups, Theorem 1: matrix logarithm", "rotation vector theta n of R, theta in [0, pi]", "1 x 3, rad", {Mat("R", "-")}, &LogSo3Fn);
 	Def(R, "rot_angle", G, "ch01 groups, bench 1 (angle of R)", "rotation angle of R, always in [0, pi]", "rad", {Mat("R", "-")}, &RotAngle);
-	Def(R, "quat", G, "ch01 groups, Theorem 2 (double cover)", "axis-angle to unit quaternion (cos(theta/2), sin(theta/2) n)", "1 x 4 [w, x, y, z]", {Mat("n", "-"), Num("theta", "rad")}, &QuatFn);
+	Def(R, "quat", G, "ch01 groups, Theorem 2 (Real cover)", "axis-angle to unit quaternion (cos(theta/2), sin(theta/2) n)", "1 x 4 [w, x, y, z]", {Mat("n", "-"), Num("theta", "rad")}, &QuatFn);
 	Def(R, "quat_mul", G, "ch01 groups, definitions: Hamilton product", "Hamilton product p (x) q, scalar first", "1 x 4", {Mat("p", "-"), Mat("q", "-")}, &QuatMul);
 	Def(R, "quat_conj", G, "ch01 groups, definitions: unit quaternions", "conjugate (w, -v), the inverse of a unit quaternion", "1 x 4", {Mat("q", "-")}, &QuatConj);
 	Def(R, "quat_rot", G, "ch01 groups, Theorem 2 proof: R(q) v = q (0,v) q^-1", "rotate a vector by a quaternion (q is normalized)", "1 x 3", {Mat("q", "-"), Mat("v", "")}, &QuatRot);
 	Def(R, "quat2dcm", G, "ch01 groups, definitions: R(q)", "R(q) = (w^2 - v.v)I + 2vv' + 2w[v]x (q is normalized)", "3 x 3 rotation", {Mat("q", "-")}, &Quat2Dcm);
-	Def(R, "dcm2quat", G, "ch01 groups, Theorem 2 (double cover)", "unit quaternion of a rotation matrix (Shepperd), sign chosen with w >= 0", "1 x 4", {Mat("R", "-")}, &Dcm2Quat);
+	Def(R, "dcm2quat", G, "ch01 groups, Theorem 2 (Real cover)", "unit quaternion of a rotation matrix (Shepperd), sign chosen with w >= 0", "1 x 4", {Mat("R", "-")}, &Dcm2Quat);
 	Def(R, "slerp", G, "ch01 groups, other guises: slerp (Shoemake 1985)", "geodesic interpolation on S^3, the short way round", "1 x 4 unit quaternion", {Mat("q0", "-"), Mat("q1", "-"), Num("t", "-", 0.5)}, &Slerp);
 	Def(R, "bracket", G, "ch01 groups, definitions: Lie bracket of so(3)", "[[a]x, [b]x] as a vector (= a x b), or A B - B A for square matrices", "1 x 3 or n x n", {Mat("a", "-"), Mat("b", "-")}, &Bracket);
 	Def(R, "comm_angle", G, "ch01 groups, counterexample 1 (order matters)", "angle of Rx(a) Ry(b) Rx(a)' Ry(b)', ~ a b for small angles", "rad", {Num("alpha", "rad", 60 * D2R), Num("beta", "rad", 60 * D2R)}, &CommAngle);
@@ -2439,7 +2498,7 @@ void RegisterAtlasLibrary(Registry& R)
 	Def(R, "lookat", T, "ch02 topology, guises: pointing and look-at frames", "up-vector u(d) = (z - (z.d)d)/|...|; fails at d = +-z (hairy ball)", "1 x 3", {Mat("d", "-")}, &LookAt);
 	Def(R, "navfn", T, "ch02 topology, guises: navigation functions (Rimon-Koditschek)", "phi = gamma/(gamma^k + beta)^(1/k) on the chapter's disk with 3 obstacles", "record phi, fx, fy",
 		{Num("x", "-"), Num("y", "-"), Num("k", "-", 2), Num("gx", "-", 0), Num("gy", "-", 0.6), Num("r", "-", 0.25)}, &NavFn);
-	Def(R, "nav_index", T, "ch02 topology, bench 4 (Poincare-Hopf index count)", "gradient winding per grid cell; total = chi = 1 - M = -2", "record total, plus, minus (cells)",
+	Def(R, "nav_index", T, "ch02 topology, bench 4 (Poincare-Hopf index count)", "gradient winding per grid cell (n <= 400); total = chi = 1 - M = -2", "record total, plus, minus (cells)",
 		{Num("k", "-", 2), Num("gx", "-", 0), Num("gy", "-", 0.6), Num("r", "-", 0.25), Num("n", "-", 220)}, &NavIndex);
 	Def(R, "unwind", T, "ch02 topology, counterexample 2 (unwinding)", "25 s quaternion feedback sim; law 0 naive, 1 sign switch, 2 hybrid (mulberry32 seed 99)", "record travelled (rad), switches, final (rad)",
 		{Num("theta0", "rad", 340 * D2R), Num("law", "-", 0), Num("sigma", "-", 0.05), Num("w0", "rad/s", 0)}, &Unwind);
@@ -2468,8 +2527,8 @@ void RegisterAtlasLibrary(Registry& R)
 	Def(R, "is_w2", M, "ch05 measure, Theorem 4 / counterexample 2", "importance sampling N(0,1) from N(0,s^2): E_q[w^2] = s^2/sqrt(2s^2-1), inf for s^2 <= 1/2", "record w2, ess (fraction), fvar (per sample, f = x^2)",
 		{Num("s", "-", 0.65)}, &IsW2);
 	Def(R, "vdc", M, "ch05 measure, bench 4 (radical inverse)", "van der Corput radical inverse of i in base b", "[0, 1)", {Num("i", "-"), Num("b", "-", 2)}, &Vdc);
-	Def(R, "halton", M, "ch05 measure, Theorem 5 / bench 4 (Halton 1960)", "first n Halton points in d dimensions (indices 1..n, prime bases)", "n x d", {Num("n", "-"), Num("d", "-", 2)}, &Halton);
-	Def(R, "qmc_err", M, "ch05 measure, bench 4 (random vs well-placed points)", "Halton integration error: kind 1 prod (pi/2) sin(pi x), kind 0 indicator of sum < d/2", "absolute error",
+	Def(R, "halton", M, "ch05 measure, Theorem 5 / bench 4 (Halton 1960)", "first n Halton points in d dimensions (indices 1..n, prime bases; n <= 20000, n d <= 80000)", "n x d", {Num("n", "-"), Num("d", "-", 2)}, &Halton);
+	Def(R, "qmc_err", M, "ch05 measure, bench 4 (random vs well-placed points)", "Halton integration error: kind 1 prod (pi/2) sin(pi x), kind 0 indicator of sum < d/2 (N d <= 100000)", "absolute error",
 		{Num("N", "-", 8192), Num("d", "-", 4), Num("kind", "-", 1)}, &QmcErr);
 	Def(R, "ess", M, "ch05 measure, guises: particle filter N_eff", "effective sample size (sum w)^2 / sum w^2", "particles", {Mat("w", "-")}, &Ess);
 	Def(R, "logz", M, "ch05 measure, Gibbs variational principle", "log partition function log sum exp(-E)", "-", {Mat("E", "-")}, &LogZFn);
