@@ -86,6 +86,7 @@ void Registry::Add(const FunctionInfo& Info)
 	{
 		if (Existing.Name == Info.Name)
 		{
+			Duplicated.push_back(Info.Name + " (" + Existing.Category + " and " + Info.Category + ")");
 			Existing = Info;
 			return;
 		}

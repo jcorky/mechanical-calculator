@@ -259,3 +259,18 @@ TEST(riccati_and_lyapunov)
 	CHECK(la::Lyap(Fc, Q, &X, nullptr));
 	CHECK(la::MaxAbs(la::Add(la::Add(la::Mul(Fc, X), la::Mul(X, la::Transpose(Fc))), Q)) < 1e-13);
 }
+
+TEST(registry_names_are_unique_and_documented)
+{
+	const mcalc::Registry& R = mcalc::Registry::Default();
+	for (const std::string& D : R.Duplicates())
+	{
+		std::printf("    duplicate function name: %s\n", D.c_str());
+	}
+	CHECK(R.Duplicates().empty());
+	for (const mcalc::FunctionInfo& F : R.All())
+	{
+		CHECK(!F.Summary.empty() && !F.Category.empty() && F.Fn != nullptr);
+	}
+	std::printf("    %zu functions in %zu categories\n", R.All().size(), R.Categories().size());
+}

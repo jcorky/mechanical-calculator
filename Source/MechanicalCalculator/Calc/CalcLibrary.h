@@ -108,9 +108,12 @@ public:
 	std::vector<std::string> Categories() const;
 	std::vector<const FunctionInfo*> InCategory(const std::string& Category) const;
 	std::vector<std::string> Completions(const std::string& Prefix) const;
+	// Names registered more than once (the later definition wins); the tests require none.
+	const std::vector<std::string>& Duplicates() const { return Duplicated; }
 
 private:
 	std::vector<FunctionInfo> Functions;
+	std::vector<std::string> Duplicated;
 };
 
 // Declaration helpers for library files.
