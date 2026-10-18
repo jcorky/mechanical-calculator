@@ -52,6 +52,6 @@ private:
 	bool bOrbiting = false;
 	bool bPanning = false;
 	float TargetDistance = 62.0f;
-	FRotator TargetRotation = FRotator(-48.0f, 0.0f, 0.0f);
+	FRotator TargetRotation = FRotator(-40.0f, 0.0f, 0.0f);
 	FVector TargetPivot = FVector::ZeroVector;
 };

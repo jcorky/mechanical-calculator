@@ -552,6 +552,11 @@ TEST(geometry_name_plate_in_display_window)
 	CHECK(N.Lo.X >= (W.X - 0.5 * L.Width) * U && N.Hi.X <= (W.X + W.W - 0.5 * L.Width) * U);
 	CHECK(N.Hi.Y <= (0.5 * L.Height - W.Y) * U && N.Lo.Y >= (0.5 * L.Height - W.Y - W.H) * U);
 	CHECK(N.Lo.Z > -0.1 && N.Hi.Z < 3.0);
+	// The text field lies inside the plate, on its sunk face.
+	const mgeo::Vec3 C = B.NamePlateCenter;
+	CHECK(C.X - 0.5 * B.NamePlateWidthMm > N.Lo.X && C.X + 0.5 * B.NamePlateWidthMm < N.Hi.X);
+	CHECK(C.Y - 0.5 * B.NamePlateHeightMm > N.Lo.Y && C.Y + 0.5 * B.NamePlateHeightMm < N.Hi.Y);
+	CHECK(C.Z > N.Lo.Z && C.Z < N.Hi.Z && B.NamePlateHeightMm > 8.0);
 }
 
 TEST(geometry_display_clear_of_keys)

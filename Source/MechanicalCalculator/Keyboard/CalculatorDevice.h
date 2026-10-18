@@ -1,5 +1,5 @@
 // The keyboard's firmware: turns key presses into an edited input line, runs it through the
-// calculator Session, and lays out the OLED's character screen. Engine-independent.
+// calculator Session, and lays out the character screen (the printed tape, or the OLED). Engine-independent.
 //
 // Screen (Cols x Rows characters):
 //   row 0             status: angle mode, digits, CAPS / SHIFT / NUM / FN, library page
@@ -11,6 +11,7 @@
 #include "CalcSession.h"
 #include "KeyLayout.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -54,6 +55,9 @@ public:
 	const std::string& Input() const { return Line; }
 	int Cursor() const { return CursorPos; }
 	const std::vector<std::string>& Tape() const { return TapeLines; }
+	// Tape lines printed since power-on (Tape() keeps only the last kMaxTape); the printer feeds the
+	// paper by the newest ones.
+	uint64_t PrintedCount() const { return Printed; }
 	bool IsShifted() const { return ShiftCount > 0; }
 	bool CapsLock() const { return Caps; }
 	bool NumLock() const { return Num; }
@@ -80,6 +84,7 @@ private:
 	int HistoryIndex = -1;          // -1 = editing a new line
 	std::string Draft;              // the unfinished line while browsing history
 	std::vector<std::string> TapeLines;
+	uint64_t Printed = 0;
 	int TapeScroll = 0;             // lines scrolled up from the bottom
 	int ShiftCount = 0;
 	int CtrlCount = 0;

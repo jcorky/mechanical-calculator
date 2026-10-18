@@ -1,6 +1,8 @@
-// The keyboard actor: builds every part from the procedural geometry, animates each key's switch,
-// spring and stabilizer, plays the synthesized sounds, drives the RGB backlight and the OLED, and
-// feeds keystrokes to the calculator firmware (Keyboard/CalculatorDevice.h).
+// The keyboard actor: builds the keyboard and the calculating mechanism behind it from the
+// procedural geometry, animates each key's switch, spring and stabilizer, runs every evaluation on
+// the stepped-drum gears and plays their motion, prints the tape, turns the memory columns, plays
+// the synthesized sounds, drives the RGB backlight, and feeds keystrokes to the calculator firmware
+// (Keyboard/CalculatorDevice.h).
 #pragma once
 
 #include "Async/Future.h"
@@ -10,12 +12,17 @@
 #include "GameFramework/Actor.h"
 #include "InputCoreTypes.h"
 #include "KeyboardAudio.h"
+#include "GearParts.h"
 #include "KeyboardParts.h"
+#include "MechanismAnimator.h"
 #include "MechanismPlayer.h"
 #include "SwitchModel.h"
 #include "MechanicalKeyboard.generated.h"
 
 class UBoxComponent;
+class UInstancedStaticMeshComponent;
+class UMaterialInterface;
+class UStaticMesh;
 class UMaterialInstanceDynamic;
 class UPrimitiveComponent;
 class UProceduralMeshComponent;
@@ -27,6 +34,13 @@ enum class EKeyboardSwitch : uint8
 	Linear UMETA(DisplayName = "Linear (red)"),
 	Tactile UMETA(DisplayName = "Tactile (brown)"),
 	Clicky UMETA(DisplayName = "Clicky (blue)"),
+};
+
+UENUM(BlueprintType)
+enum class EKeyboardKeycaps : uint8
+{
+	Sculpted UMETA(DisplayName = "Sculpted (Cherry profile)"),
+	Vintage UMETA(DisplayName = "Vintage (round, chrome rims)"),
 };
 
 USTRUCT(BlueprintType)
@@ -58,6 +72,18 @@ struct FKeyboardTheme
 	FLinearColor Plate = FLinearColor(0.72f, 0.72f, 0.74f);
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Body")
 	FLinearColor Screen = FLinearColor(0.42f, 0.92f, 1.0f);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vintage")
+	FLinearColor VintageCaps = FLinearColor(0.012f, 0.012f, 0.013f);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vintage")
+	FLinearColor VintageOperatorCaps = FLinearColor(0.42f, 0.015f, 0.012f);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vintage")
+	FLinearColor VintageLegend = FLinearColor(0.92f, 0.91f, 0.86f);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mechanism")
+	FLinearColor Ink = FLinearColor(0.02f, 0.02f, 0.035f);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mechanism")
+	FLinearColor ErrorInk = FLinearColor(0.45f, 0.02f, 0.02f);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mechanism")
+	FLinearColor Engraving = FLinearColor(0.025f, 0.02f, 0.015f);
 };
 
 // What comes back from the machine for one line: the result, the work, and the first part of the
@@ -107,11 +133,25 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mechanical Calculator")
 	TArray<FString> GetScreenLines() const;
 
+	// Where a camera should look to frame the whole device, and from how far (world, cm).
+	UFUNCTION(BlueprintPure, Category = "Mechanical Calculator")
+	FVector GetViewPivot() const;
+	UFUNCTION(BlueprintPure, Category = "Mechanical Calculator")
+	float GetViewDistance() const;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Keyboard")
 	EKeyboardSwitch SwitchType = EKeyboardSwitch::Tactile;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Keyboard")
+	EKeyboardKeycaps Keycaps = EKeyboardKeycaps::Sculpted;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Keyboard")
 	FKeyboardTheme Theme;
+
+	// The OLED above the numpad. Without it a brass name plate sits there and the tape is the
+	// display (the OLED is always fitted when the mechanism is hidden).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Keyboard")
+	bool bOledModule = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Keyboard")
 	bool bShowLegends = true;
@@ -149,6 +189,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mechanism", meta = (ClampMin = "100"))
 	int32 RecordedEvents = 6000;
 
+	// The stepped-drum machine, printer and memory columns on their plinth behind the keyboard. The
+	// arithmetic runs on the gear model either way; this only shows it.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mechanism")
+	bool bShowMechanism = true;
+
+	// The glass top over the drum bank (the mechanism is shown open by default).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mechanism")
+	bool bShowGlassCover = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mechanism")
+	FString MakersPlateText = TEXT("MECHANICAL CALCULATOR  -  WHERE IT ISN'T");
+
 	// Reverses every triangle, in case an engine version expects the opposite front face.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Advanced")
 	bool bFlipWinding = false;
@@ -158,6 +210,10 @@ public:
 
 	UPROPERTY(VisibleAnywhere, Category = "Components")
 	TObjectPtr<USceneComponent> BoardRoot;
+
+	// The desk frame of the mechanism: the plinth's top, under the keyboard's origin.
+	UPROPERTY(VisibleAnywhere, Category = "Components")
+	TObjectPtr<USceneComponent> MechanismRoot;
 
 private:
 	struct FKeyRuntime
@@ -192,8 +248,26 @@ private:
 		double Delay = 0.0;
 	};
 
+	// One moving part of the mechanism: one instanced mesh, one instance per pose.
+	struct FMechPart
+	{
+		mkb::MovingPart Part = mkb::MovingPart::Count;
+		UInstancedStaticMeshComponent* Instances = nullptr;
+		TArray<FTransform> Placed;
+	};
+
 	void Build();
 	void DestroyBuilt();
+	void BuildMechanism(const mgeo::CaseParams& CaseP, bool bFlip);
+	UMaterialInterface* MechSurface(mgeo::MechMaterial Material);
+	UStaticMesh* MechMesh(const mgeo::MechPart& Part, const FName& Name, bool bFlip);
+	UInstancedStaticMeshComponent* NewInstanced(USceneComponent* Parent, const FName& Name, UStaticMesh* Mesh);
+	USceneComponent* NewScene(USceneComponent* Parent, const FName& Name);
+	UTextRenderComponent* NewLabel(USceneComponent* Parent, const mgeo::Vec3& Center, const mgeo::Vec3& Normal, const mgeo::Vec3& Up, double HeightMm, const FLinearColor& Color, bool bCentered);
+	void TickMechanism(float DeltaSeconds);
+	void PlaceTape();
+	void RefreshMemory();
+	void FeedPaper();
 	UProceduralMeshComponent* NewMesh(USceneComponent* Parent, const FName& Name);
 	UTextRenderComponent* NewText(USceneComponent* Parent, const FName& Name);
 	UMaterialInstanceDynamic* Surface(const FLinearColor& Color, float Metallic, float Roughness, float Specular = 0.5f, bool bTranslucent = false, float Opacity = 1.0f,
@@ -231,6 +305,22 @@ private:
 	TArray<UTextRenderComponent*> ScreenLines;
 	int32 ScreenCols = 32;
 	int32 ScreenRows = 5;
+	UTextRenderComponent* StatusLine = nullptr;     // on the name plate
+
+	// The mechanism. The animator keeps a reference to the parts, so Mechanism is rebuilt in place.
+	mgeo::MechanismParts Mechanism;
+	TUniquePtr<mkb::MechanismAnimator> Animator;
+	TArray<FMechPart> MechParts;
+	USceneComponent* CarriageRoot = nullptr;
+	TMap<int32, UMaterialInterface*> MechMaterials;
+	TArray<UTextRenderComponent*> TapeLines;          // [0] is the print line
+	TArray<FString> LastTape;
+	bool bPaperMoving = false;
+	TArray<UTextRenderComponent*> MemoryLabels;
+	int32 TapeCols = 34;
+	uint64 LastPrinted = 0;
+	FVector ViewCenter = FVector(0.0, 0.0, 2.0);       // actor-local, cm
+	float ViewDistance = 62.0f;
 	float StemsFraction = 0.75f;
 	float CapsFraction = 1.0f;
 	float SpringsFraction = 0.36f;

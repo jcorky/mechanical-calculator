@@ -1111,6 +1111,9 @@ BoardParts BuildBoard(const mkb::Layout& Layout, const CaseParams& P)
 		Loft(N, {AtZ(Outer, -0.05), AtZ(Outer, 1.6), AtZ(Lip, 2.2)});
 		Loft(N, {AtZ(Lip, 2.2), AtZ(Field, 2.2), AtZ(Field, 1.7)});
 		FanCap(N, AtZ(Field, 1.7), Vec3(Dcx, Dcy, 1.7), Up);
+		B.NamePlateCenter = Vec3(Dcx, Dcy, 1.7);
+		B.NamePlateWidthMm = 2.0 * (Hx - 1.6);
+		B.NamePlateHeightMm = 2.0 * (Hy - 1.6);
 		FanCap(N, AtZ(Outer, -0.05), Vec3(Dcx, Dcy, -0.05), Down);
 		for (double S = -1.0; S <= 1.0; S += 2.0)
 		{

@@ -32,6 +32,7 @@ struct MechanismState
 	double CarryLever[AccumulatorDigits] = {};   // 0 rest .. 1 tripped
 	double Reverse = 0.0;               // reversing lever: 0 add .. 1 subtract
 	double BellHammer = 0.0;            // 0 rest .. 1 struck, decays
+	double Clearing = 0.0;              // clearing levers: 0 rest .. 1 thrown (while the registers clear)
 	char Op = ' ';                      // procedure under way: + - * / r, or ' ' idle
 	bool Running = false;
 };
@@ -78,4 +79,6 @@ private:
 // The number under the cursor in an input line, as setting-register digits (units first), so the
 // setting indicators follow the keys while a number is typed. Empty if the cursor is not in a number.
 std::vector<uint8_t> SettingFromInput(const std::string& Line, int Cursor);
+// Its decimal places, for the setting register's decimal marker (0 without a point or a number).
+int DecimalPlacesInInput(const std::string& Line, int Cursor);
 } // namespace mkb

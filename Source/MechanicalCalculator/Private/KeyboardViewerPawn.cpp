@@ -32,7 +32,8 @@ AMechanicalKeyboard* AKeyboardViewerPawn::FindKeyboard()
 		for (TActorIterator<AMechanicalKeyboard> It(GetWorld()); It; ++It)
 		{
 			Keyboard = *It;
-			TargetPivot = It->GetActorLocation() + FVector(-2.0, 0.0, 2.0);
+			TargetPivot = It->GetViewPivot();
+			TargetDistance = It->GetViewDistance();
 			SetActorLocation(TargetPivot);
 			break;
 		}
@@ -43,10 +44,11 @@ AMechanicalKeyboard* AKeyboardViewerPawn::FindKeyboard()
 void AKeyboardViewerPawn::ResetView()
 {
 	TargetDistance = 62.0f;
-	TargetRotation = FRotator(-48.0f, 0.0f, 0.0f);
+	TargetRotation = FRotator(-40.0f, 0.0f, 0.0f);
 	if (AMechanicalKeyboard* K = FindKeyboard())
 	{
-		TargetPivot = K->GetActorLocation() + FVector(-2.0, 0.0, 2.0);
+		TargetPivot = K->GetViewPivot();
+		TargetDistance = K->GetViewDistance();
 	}
 }
 

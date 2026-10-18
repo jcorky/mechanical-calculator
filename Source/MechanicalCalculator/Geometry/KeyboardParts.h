@@ -161,6 +161,9 @@ struct BoardParts
 	double RestTiltRad = 0.0;
 	double RestLiftMm = 0.0;
 	Mesh NamePlate;             // brass plate in the display window when there is no OLED module
+	Vec3 NamePlateCenter;       // centre of its sunk field (faces +z), for text
+	double NamePlateWidthMm = 0.0;
+	double NamePlateHeightMm = 0.0;
 };
 
 BoardParts BuildBoard(const mkb::Layout& Layout, const CaseParams& P);

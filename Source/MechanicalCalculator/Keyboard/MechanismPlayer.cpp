@@ -101,6 +101,7 @@ void MechanismPlayer::Settle(const mcalc::GearEvent& E)
 		S.Counter[i] = E.Counter[i];
 	}
 	S.Carriage = E.Shift;
+	S.Clearing = 0.0;
 	S.Op = E.Type == mcalc::GearEventType::End ? ' ' : E.Op;
 	Last = E;
 }
@@ -145,6 +146,7 @@ void MechanismPlayer::Apply(const mcalc::GearEvent& E, const mcalc::GearEvent& B
 		break;
 	case mcalc::GearEventType::Clear:
 		// The clearing handle spins every wheel forward to zero.
+		S.Clearing = std::sin(3.14159265358979 * U);
 		for (int p = 0; p < MechanismState::AccumulatorDigits; ++p)
 		{
 			const int D = ((E.Accumulator[p] - Before.Accumulator[p]) % 10 + 10) % 10;
@@ -218,17 +220,19 @@ void MechanismPlayer::SkipToEnd()
 	S.Running = false;
 }
 
-std::vector<uint8_t> SettingFromInput(const std::string& Line, int Cursor)
+namespace player_detail
 {
-	std::vector<uint8_t> Digits;
+// The number under the cursor as [Begin, End) in Line; false if the cursor is not in a number.
+bool NumberAtCursor(const std::string& Line, int Cursor, int* Begin, int* End)
+{
 	if (Cursor <= 0 || Cursor > static_cast<int>(Line.size()))
 	{
-		return Digits;
+		return false;
 	}
 	auto InNumber = [&Line](int i) { return i >= 0 && i < static_cast<int>(Line.size()) && (std::isdigit(static_cast<unsigned char>(Line[static_cast<size_t>(i)])) != 0 || Line[static_cast<size_t>(i)] == '.'); };
 	if (!InNumber(Cursor - 1))
 	{
-		return Digits;
+		return false;
 	}
 	int B = Cursor - 1;
 	while (InNumber(B - 1))
@@ -238,12 +242,26 @@ std::vector<uint8_t> SettingFromInput(const std::string& Line, int Cursor)
 	// A number is not part of a name (x2) or an exponent (1e5's 5 belongs to the exponent).
 	if (B > 0 && (std::isalpha(static_cast<unsigned char>(Line[static_cast<size_t>(B - 1)])) != 0 || Line[static_cast<size_t>(B - 1)] == '_'))
 	{
-		return Digits;
+		return false;
 	}
 	int E = Cursor;
 	while (InNumber(E))
 	{
 		++E;
+	}
+	*Begin = B;
+	*End = E;
+	return true;
+}
+} // namespace player_detail
+
+std::vector<uint8_t> SettingFromInput(const std::string& Line, int Cursor)
+{
+	std::vector<uint8_t> Digits;
+	int B = 0, E = 0;
+	if (!NumberAtCursor(Line, Cursor, &B, &E))
+	{
+		return Digits;
 	}
 	for (int i = E - 1; i >= B && Digits.size() < static_cast<size_t>(MechanismState::SettingDigits); --i)
 	{
@@ -253,5 +271,20 @@ std::vector<uint8_t> SettingFromInput(const std::string& Line, int Cursor)
 		}
 	}
 	return Digits;
+}
+
+int DecimalPlacesInInput(const std::string& Line, int Cursor)
+{
+	int B = 0, E = 0;
+	if (!NumberAtCursor(Line, Cursor, &B, &E))
+	{
+		return 0;
+	}
+	const size_t Point = Line.find('.', static_cast<size_t>(B));
+	if (Point == std::string::npos || Point >= static_cast<size_t>(E))
+	{
+		return 0;
+	}
+	return std::min(E - static_cast<int>(Point) - 1, MechanismState::SettingDigits - 1);
 }
 } // namespace mkb

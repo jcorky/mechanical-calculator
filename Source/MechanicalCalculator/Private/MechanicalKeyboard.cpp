@@ -59,7 +59,13 @@ FString LegendText(const std::string& S)
 
 FString CacheKeyFor(const mgeo::KeycapParams& P)
 {
-	return FString::Printf(TEXT("%.3f_%.3f_%d_%d_%d"), P.WidthU, P.DepthU, P.ProfileRow, P.Spacebar ? 1 : 0, P.HomingBar ? 1 : 0);
+	return FString::Printf(TEXT("%.3f_%.3f_%d_%d_%d_%d"), P.WidthU, P.DepthU, P.ProfileRow, P.Spacebar ? 1 : 0, P.HomingBar ? 1 : 0, static_cast<int32>(P.Style));
+}
+
+// The red keys of the vintage set: the operators, Enter and Esc.
+bool IsVintageRed(const mkb::KeyDef& Def)
+{
+	return IsNumpadOperator(Def) || Def.Role == mkb::KeyRole::Accent || Def.Id == "Enter" || Def.Id == "NumEnter";
 }
 
 // A frame on a keycap face, in the cap's local geometry frame (mm): origin, outward normal, and the
@@ -94,6 +100,8 @@ AMechanicalKeyboard::AMechanicalKeyboard()
 	SetRootComponent(Root);
 	BoardRoot = CreateDefaultSubobject<USceneComponent>(TEXT("BoardRoot"));
 	BoardRoot->SetupAttachment(Root);
+	MechanismRoot = CreateDefaultSubobject<USceneComponent>(TEXT("MechanismRoot"));
+	MechanismRoot->SetupAttachment(Root);
 
 	// One line from each corner of Where It Isn't, typed on the keys until the first real keystroke.
 	DemoLines = {
@@ -206,6 +214,7 @@ void AMechanicalKeyboard::TickMachine(float DeltaSeconds)
 		bPlayingBack = false;
 		Device.CompleteEvaluation(Finished.Outcome, Finished.Work);
 		RefreshScreen();
+		RefreshMemory();   // the result is in ans: the memory columns and the type wheels turn to it
 	}
 	if (!Device.Busy())
 	{
@@ -227,6 +236,14 @@ void AMechanicalKeyboard::DestroyBuilt()
 	Keys.Reset();
 	Layers.Reset();
 	ScreenLines.Reset();
+	StatusLine = nullptr;
+	MechParts.Reset();
+	CarriageRoot = nullptr;
+	MechMaterials.Reset();
+	TapeLines.Reset();
+	LastTape.Reset();
+	MemoryLabels.Reset();
+	Animator.Reset();
 	Materials.Reset();
 	Tops = nullptr;
 	TopColors.Reset();
@@ -280,6 +297,10 @@ UMaterialInstanceDynamic* AMechanicalKeyboard::Surface(const FLinearColor& Color
 
 FLinearColor AMechanicalKeyboard::CapColor(const mkb::KeyDef& Def) const
 {
+	if (Keycaps == EKeyboardKeycaps::Vintage)
+	{
+		return IsVintageRed(Def) ? Theme.VintageOperatorCaps : Theme.VintageCaps;
+	}
 	if (IsNumpadOperator(Def))
 	{
 		return Theme.NumpadOperatorCaps;
@@ -297,6 +318,10 @@ FLinearColor AMechanicalKeyboard::CapColor(const mkb::KeyDef& Def) const
 
 bool AMechanicalKeyboard::CapIsDark(const mkb::KeyDef& Def) const
 {
+	if (Keycaps == EKeyboardKeycaps::Vintage)
+	{
+		return true;
+	}
 	return IsNumpadOperator(Def) || Def.Role == mkb::KeyRole::Modifier || Def.Role == mkb::KeyRole::Accent || Def.Role == mkb::KeyRole::Function ||
 		Def.Role == mkb::KeyRole::Navigation;
 }
@@ -307,8 +332,9 @@ void AMechanicalKeyboard::AddLegends(FKeyRuntime& Runtime, const mkb::KeyDef& De
 	{
 		return;
 	}
+	const bool bVintage = Keycaps == EKeyboardKeycaps::Vintage;
 	const bool bDark = CapIsDark(Def);
-	const FColor Ink = ToColor(bDark ? Theme.LegendOnDark : Theme.LegendOnLight);
+	const FColor Ink = ToColor(bVintage ? Theme.VintageLegend : bDark ? Theme.LegendOnDark : Theme.LegendOnLight);
 	auto Place = [this, &Runtime](const FFaceFrame& F, double Right, double Up, double Lift, double HeightMm, const FString& Text, const FColor& Color, EHorizTextAligment Align) {
 		UTextRenderComponent* T = NewText(Runtime.Cap, FName(TEXT("Legend")));
 		const mgeo::Vec3 P = F.Origin + mgeo::Vec3(Right, 0.0, 0.0) + F.Up * Up + F.Normal * Lift;
@@ -336,7 +362,7 @@ void AMechanicalKeyboard::AddLegends(FKeyRuntime& Runtime, const mkb::KeyDef& De
 		const double Size = bWord ? (Main.Len() > 5 ? 2.0 : 2.4) : 3.6;
 		Place(TopF, 0.0, 0.0, LiftAt(0.0), Size, Main, Ink, EHTA_Center);
 	}
-	if (!Def.FrontLegend.empty())
+	if (!Def.FrontLegend.empty() && !bVintage)   // round vintage caps have no front wall
 	{
 		const FColor FrontInk = ToColor(Def.Role == mkb::KeyRole::Accent || IsNumpadOperator(Def) ? Theme.LegendOnDark : Theme.FrontLegend);
 		Place(FrontFrame(Top), 0.0, 0.0, 0.05, 1.7, LegendText(Def.FrontLegend), FrontInk, EHTA_Center);
@@ -347,10 +373,23 @@ void AMechanicalKeyboard::Build()
 {
 	DestroyBuilt();
 	const mkb::Layout& L = mkb::FullSizeAnsi();
-	const mgeo::CaseParams CaseP;
+	mgeo::CaseParams CaseP;
+	CaseP.OledModule = bOledModule || !bShowMechanism;
 	const mgeo::BoardParts Board = mgeo::BuildBoard(L, CaseP);
+	// The keyboard stands on the mechanism's plinth when there is one.
+	double PlinthMm = 0.0;
+	if (bShowMechanism)
+	{
+		BuildMechanism(CaseP, bFlipWinding);
+		PlinthMm = Mechanism.PlinthHeightMm;
+	}
+	else
+	{
+		ViewCenter = FVector(-2.0, 0.0, 2.0);
+		ViewDistance = 62.0f;
+	}
 	BoardRoot->SetRelativeRotation(FRotator(FMath::RadiansToDegrees(Board.RestTiltRad), 0.0, 0.0));
-	BoardRoot->SetRelativeLocation(FVector(0.0, 0.0, Board.RestLiftMm * 0.1));
+	BoardRoot->SetRelativeLocation(FVector(0.0, 0.0, (Board.RestLiftMm + PlinthMm) * 0.1));
 
 	const bool bFlip = bFlipWinding;
 	auto Section = [bFlip](UProceduralMeshComponent* Mesh, int32 Index, const mgeo::Mesh& Src, UMaterialInterface* Material) {
@@ -379,6 +418,7 @@ void AMechanicalKeyboard::Build()
 		: SwitchType == EKeyboardSwitch::Clicky ? FLinearColor(0.08f, 0.22f, 0.75f) : FLinearColor(0.28f, 0.13f, 0.06f);
 	UMaterialInstanceDynamic* StemMat = Surface(StemColor, 0.0f, 0.45f);
 	UMaterialInstanceDynamic* StabStemMat = Surface(FLinearColor(0.9f, 0.9f, 0.88f), 0.0f, 0.5f);
+	UMaterialInstanceDynamic* Chrome = Surface(FLinearColor(0.92f, 0.92f, 0.94f), 1.0f, 0.07f);
 
 	// Static layers, bottom to top. ExplodeFraction lifts each one in the exploded view.
 	auto AddLayer = [this](const TCHAR* Name, float Fraction) {
@@ -408,6 +448,7 @@ void AMechanicalKeyboard::Build()
 	const FMeshSectionData SpringData = KeyboardMesh::Convert(SpringLocal, FLinearColor::Black, bFlip);
 	SpringRestCm = FMath::Max(0.05, (Sw.SpringRestTopZ - Sw.SpringBottomZ) * 0.1);
 	TMap<FString, FMeshSectionData> CapCache;
+	TMap<FString, FMeshSectionData> RimCache;
 	const mkb::SwitchSpec KeySpec = Spec();
 
 	for (int32 i = 0; i < static_cast<int32>(L.Keys.size()); ++i)
@@ -447,6 +488,7 @@ void AMechanicalKeyboard::Build()
 		}
 
 		mgeo::KeycapParams CapP;
+		CapP.Style = Keycaps == EKeyboardKeycaps::Vintage ? mgeo::KeycapStyle::Vintage : mgeo::KeycapStyle::Sculpted;
 		CapP.WidthU = Def.W;
 		CapP.DepthU = Def.H;
 		CapP.ProfileRow = Def.ProfileRow;
@@ -456,11 +498,21 @@ void AMechanicalKeyboard::Build()
 		if (!CapCache.Contains(CacheKey))
 		{
 			CapCache.Add(CacheKey, KeyboardMesh::Convert(mgeo::BuildKeycap(CapP), FLinearColor::Black, bFlip));
+			if (CapP.Style == mgeo::KeycapStyle::Vintage)
+			{
+				RimCache.Add(CacheKey, KeyboardMesh::Convert(mgeo::BuildKeycapRim(CapP), FLinearColor::Black, bFlip));
+			}
 		}
 		R.Cap = NewMesh(R.Mover, FName(*(TEXT("Cap_") + Base)));
 		KeyboardMesh::SetSection(R.Cap, 0, CapCache[CacheKey]);
-		UMaterialInstanceDynamic* CapMat = Surface(CapColor(Def), 0.0f, 0.58f, 0.4f);
+		const bool bVintage = CapP.Style == mgeo::KeycapStyle::Vintage;
+		UMaterialInstanceDynamic* CapMat = bVintage ? Surface(CapColor(Def), 0.0f, 0.22f, 0.55f) : Surface(CapColor(Def), 0.0f, 0.58f, 0.4f);
 		R.Cap->SetMaterial(0, CapMat);
+		if (const FMeshSectionData* Rim = RimCache.Find(CacheKey))
+		{
+			KeyboardMesh::SetSection(R.Cap, 1, *Rim);
+			R.Cap->SetMaterial(1, Chrome);
+		}
 
 		const mgeo::KeycapTop Top = mgeo::KeycapTopFor(CapP);
 		R.Hit = NewObject<UBoxComponent>(this, MakeUniqueObjectName(this, UBoxComponent::StaticClass(), FName(*(TEXT("Hit_") + Base))));
@@ -496,6 +548,7 @@ void AMechanicalKeyboard::Build()
 	Section(PlateLayer, 2, StabWires, Steel);
 	Section(PlateLayer, 3, Board.DisplayBezel, Bezel);
 	Section(PlateLayer, 4, Board.DisplayGlass, Glass);
+	Section(PlateLayer, 5, Board.NamePlate, Brass);
 	Tops = AddLayer(TEXT("SwitchTops"), 0.56f);
 	Section(Tops, 0, TopsAll, Housing);
 	Tops->SetCastShadow(false);
@@ -524,6 +577,17 @@ void AMechanicalKeyboard::Build()
 			T->SetText(FText::GetEmpty());
 			ScreenLines.Add(T);
 		}
+	}
+	// Without the OLED the brass name plate carries the title and the status line.
+	if (Board.NamePlateWidthMm > 10.0 && !Board.NamePlate.Triangles.empty())
+	{
+		const mgeo::Vec3 N(0.0, 0.0, 1.0), Up(0.0, 1.0, 0.0);
+		const double H = Board.NamePlateHeightMm;
+		const FString Title = TEXT("WHERE IT ISN'T");
+		const double TitleMm = FMath::Min(H * 0.34, Board.NamePlateWidthMm / (0.62 * Title.Len()));
+		UTextRenderComponent* TitleText = NewLabel(PlateLayer, Board.NamePlateCenter + Up * (H * 0.18), N, Up, TitleMm, Theme.Engraving, true);
+		TitleText->SetText(FText::FromString(Title));
+		StatusLine = NewLabel(PlateLayer, Board.NamePlateCenter - Up * (H * 0.25), N, Up, FMath::Min(H * 0.2, Board.NamePlateWidthMm / (0.62 * 30)), Theme.Engraving, true);
 	}
 	LastScreen.Reset();
 	LastBacklightMode = -1;
@@ -811,8 +875,23 @@ void AMechanicalKeyboard::TickDemo(float DeltaSeconds)
 
 FString AMechanicalKeyboard::Evaluate(const FString& Expression)
 {
+	if (bComputing)
+	{
+		return TEXT("busy: the machine is computing");   // the worker has the session
+	}
 	const mcalc::Outcome O = Device.GetSession().Execute(std::string(TCHAR_TO_UTF8(*Expression)));
+	RefreshMemory();
 	return FString(UTF8_TO_TCHAR(O.Text.c_str()));
+}
+
+FVector AMechanicalKeyboard::GetViewPivot() const
+{
+	return GetActorTransform().TransformPosition(ViewCenter);
+}
+
+float AMechanicalKeyboard::GetViewDistance() const
+{
+	return ViewDistance * static_cast<float>(GetActorScale3D().GetMax());
 }
 
 void AMechanicalKeyboard::SetExploded(bool bExploded)
@@ -835,6 +914,30 @@ TArray<FString> AMechanicalKeyboard::GetScreenLines() const
 
 void AMechanicalKeyboard::RefreshScreen()
 {
+	if (TapeLines.Num() > 0)
+	{
+		// The tape is the display: the input line at the print line, the tape (or the library
+		// browser) above it, and the status line on the name plate.
+		const int32 Rows = TapeLines.Num() + 1;
+		const std::vector<std::string> Lines = Device.Screen(TapeCols, Rows, bCursorOn);
+		LastTape.SetNum(TapeLines.Num());
+		for (int32 N = 0; N < TapeLines.Num(); ++N)
+		{
+			const int32 Index = Rows - 1 - N;
+			const FString Text = Index >= 0 && Index < static_cast<int32>(Lines.size()) ? FString(UTF8_TO_TCHAR(Lines[static_cast<size_t>(Index)].c_str())).TrimEnd() : FString();
+			if (Text != LastTape[N] && TapeLines[N])
+			{
+				TapeLines[N]->SetText(FText::FromString(Text));
+				// Error lines in the ribbon's red half.
+				TapeLines[N]->SetTextRenderColor(ToColor(Text.StartsWith(TEXT("! ")) ? Theme.ErrorInk : Theme.Ink));
+				LastTape[N] = Text;
+			}
+		}
+		if (StatusLine && !Lines.empty())
+		{
+			StatusLine->SetText(FText::FromString(FString(UTF8_TO_TCHAR(Lines[0].c_str())).TrimStartAndEnd()));
+		}
+	}
 	if (ScreenLines.Num() == 0)
 	{
 		return;
@@ -966,6 +1069,7 @@ void AMechanicalKeyboard::Tick(float DeltaSeconds)
 		TickDemo(Dt);
 	}
 	TickMachine(Dt);
+	TickMechanism(Dt);
 	TickKeys(Dt);
 	TickExplode(Dt);
 	TickBacklight();

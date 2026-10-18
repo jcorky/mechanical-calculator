@@ -14,6 +14,9 @@ public class MechanicalCalculator : ModuleRules
 			"Engine",
 			"InputCore",
 			"ProceduralMeshComponent",
+			// Runtime static meshes for the mechanism's repeated parts (instanced).
+			"MeshDescription",
+			"StaticMeshDescription",
 		});
 
 		if (Target.bBuildEditor)

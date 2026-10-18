@@ -57,6 +57,7 @@ CalculatorDevice::CalculatorDevice()
 void CalculatorDevice::AddTape(const std::string& Text, const char* Prefix)
 {
 	TapeLines.push_back(std::string(Prefix) + Text);
+	++Printed;
 	if (TapeLines.size() > kMaxTape)
 	{
 		TapeLines.erase(TapeLines.begin(), TapeLines.begin() + static_cast<std::ptrdiff_t>(TapeLines.size() - kMaxTape));
