@@ -169,6 +169,7 @@ const Registry& Registry::Default()
 		RegisterOrbitsLibrary(R);
 		RegisterOpsLibrary(R);
 		RegisterAtlasLibrary(R);
+		RegisterFieldsLibrary(R);
 		return R;
 	}();
 	return Instance;

@@ -138,10 +138,11 @@ constexpr double RAir = 287.05;             // J/(kg K)
 
 // One registration function per library file; Registry::Default() calls them all.
 void RegisterCoreMath(Registry& R);       // CalcBuiltins.cpp: elementary functions, statistics, matrices
-void RegisterControlLibrary(Registry& R); // LibControl.cpp: Riccati/Mobius, LQR, Kalman, Lyapunov, MPC, approach
+void RegisterControlLibrary(Registry& R); // LibControl.cpp: Riccati/Mobius (ch03), dynamics and Lyapunov (ch08), MPC and approach benches
 void RegisterFlightLibrary(Registry& R);  // LibFlight.cpp: equation sheet, atmosphere, flight model, planform, game
 void RegisterRadarLibrary(Registry& R);   // LibRadar.cpp: radar equation, radar basics, lens antennas
 void RegisterOrbitsLibrary(Registry& R);  // LibOrbits.cpp: Kepler, Hohmann, Lambert, CW, INS (Allan, Schuler, coning)
-void RegisterOpsLibrary(Registry& R);     // LibOps.cpp: logistics (queues, inventory, transport), graphs, SLAM, chi-square
-void RegisterAtlasLibrary(Registry& R);   // LibAtlas.cpp: chapters 1-13 (groups, topology, Hilbert, measure, lattices, dynamics, procedural, expansion)
+void RegisterOpsLibrary(Registry& R);     // LibOps.cpp: logistics (ch13 and bench), graphs (ch09), SLAM bench
+void RegisterAtlasLibrary(Registry& R);   // LibAtlas.cpp: chapters 1, 2, 4, 5, 6 (groups, topology, Hilbert spaces, measure, optimization)
+void RegisterFieldsLibrary(Registry& R);  // LibFields.cpp: chapters 7, 10, 11, 12 (lattices and GNSS, category theory, procedural systems, expansion fields)
 } // namespace mcalc
