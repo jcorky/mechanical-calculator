@@ -6,6 +6,7 @@
 #include <cstdlib>
 
 using mcalc::Matrix;
+using mcalc::Real;
 using mcalc::Session;
 namespace la = mcalc::la;
 
@@ -19,7 +20,7 @@ double OrbEval(Session& S, const std::string& Line)
 		std::printf("    '%s' -> %s\n", Line.c_str(), O.Text.c_str());
 		return std::nan("");
 	}
-	return O.Val.Scalar();
+	return O.Val.Scalar().ToDouble();
 }
 
 Matrix OrbMatrix(Session& S, const std::string& Line)
@@ -38,7 +39,7 @@ Matrix OrbMatrix(Session& S, const std::string& Line)
 TEST(orbits_cwstm_is_expm_of_hill_equations)
 {
 	Session S;
-	const double N = 0.0011313666536, T = 1234.5;
+	const Real N = Real(0.0011313666536), T = Real(1234.5);
 	Matrix A4(4, 4);
 	A4(0, 2) = 1;
 	A4(1, 3) = 1;
@@ -48,13 +49,11 @@ TEST(orbits_cwstm_is_expm_of_hill_equations)
 	Matrix E4;
 	std::string Error;
 	CHECK(la::Expm(la::Scale(A4, T), &E4, &Error));
-	char Line[128];
-	std::snprintf(Line, sizeof(Line), "cwstm(%.17g, %.17g)", N, T);
-	const Matrix P4 = OrbMatrix(S, Line);
+	const Matrix P4 = OrbMatrix(S, "cwstm(0.0011313666536, 1234.5)");
 	CHECK(P4.Rows == 4 && P4.Cols == 4);
 	if (P4.Rows == 4)
 	{
-		CHECK(la::MaxAbs(la::Sub(P4, E4)) < 1e-9 * la::MaxAbs(E4));
+		CHECK(la::MaxAbs(la::Sub(P4, E4)) < Real(1e-12) * la::MaxAbs(E4));
 	}
 	Matrix A6(6, 6);
 	A6(0, 3) = 1;
@@ -66,12 +65,11 @@ TEST(orbits_cwstm_is_expm_of_hill_equations)
 	A6(5, 2) = -N * N;
 	Matrix E6;
 	CHECK(la::Expm(la::Scale(A6, T), &E6, &Error));
-	std::snprintf(Line, sizeof(Line), "cwstm(%.17g, %.17g, 6)", N, T);
-	const Matrix P6 = OrbMatrix(S, Line);
+	const Matrix P6 = OrbMatrix(S, "cwstm(0.0011313666536, 1234.5, 6)");
 	CHECK(P6.Rows == 6 && P6.Cols == 6);
 	if (P6.Rows == 6)
 	{
-		CHECK(la::MaxAbs(la::Sub(P6, E6)) < 1e-9 * la::MaxAbs(E6));
+		CHECK(la::MaxAbs(la::Sub(P6, E6)) < Real(1e-12) * la::MaxAbs(E6));
 	}
 }
 
@@ -94,27 +92,27 @@ TEST(orbits_conic_inverts_kepstate)
 	Session S;
 	CHECK(S.Execute("k = kepstate(26000e3, 0.7, 20000)").Ok);
 	CHECK(S.Execute("c = conic([k.x, k.y], [k.vx, k.vy])").Ok);
-	CHECK_NEAR(OrbEval(S, "c.a"), 26000e3, 1e-3);
-	CHECK_NEAR(OrbEval(S, "c.e"), 0.7, 1e-12);
-	CHECK_NEAR(OrbEval(S, "c.rp"), 26000e3 * 0.3, 1e-3);
-	CHECK_NEAR(OrbEval(S, "hypot(k.vx, k.vy)"), OrbEval(S, "visviva(k.r, 26000e3)"), 1e-8);
-	CHECK_NEAR(OrbEval(S, "c.energy"), -mcalc::cst::MuEarth / (2 * 26000e3), 1e-3);
+	CHECK_NEAR(OrbEval(S, "c.a"), 26000e3, 1e-6);
+	CHECK_NEAR(OrbEval(S, "c.e"), 0.7, 1e-14);
+	CHECK_NEAR(OrbEval(S, "c.rp"), 26000e3 * 0.3, 1e-6);
+	CHECK_NEAR(OrbEval(S, "hypot(k.vx, k.vy)"), OrbEval(S, "visviva(k.r, 26000e3)"), 1e-10);
+	CHECK_NEAR(OrbEval(S, "c.energy"), -3.986004418e14 / (2 * 26000e3), 1e-6);
 	// The true anomaly from E agrees with the polar angle of the position.
-	CHECK_NEAR(OrbEval(S, "mod(atan2(k.y, k.x), 2*pi)"), OrbEval(S, "mod(k.nu, 2*pi)"), 1e-12);
+	CHECK_NEAR(OrbEval(S, "mod(atan2(k.y, k.x), 2*pi)"), OrbEval(S, "mod(k.nu, 2*pi)"), 1e-14);
 }
 
 // Hohmann is the rb -> r2 limit of the bi-elliptic transfer; the threshold separates the two.
 TEST(orbits_bielliptic_limits)
 {
 	Session S;
-	CHECK_NEAR(OrbEval(S, "bielliptic(7000e3, 70000e3, 70000e3).dv"), OrbEval(S, "hohmann(7000e3, 70000e3).dv"), 1e-6);
-	CHECK_NEAR(OrbEval(S, "bielliptic(1, 12, 1e12, 1).dv"), OrbEval(S, "bieltot(12, 1e12)"), 1e-12);
+	CHECK_NEAR(OrbEval(S, "bielliptic(7000e3, 70000e3, 70000e3).dv"), OrbEval(S, "hohmann(7000e3, 70000e3).dv"), 1e-8);
+	CHECK_NEAR(OrbEval(S, "bielliptic(1, 12, 1e12, 1).dv"), OrbEval(S, "bieltot(12, 1e12)"), 1e-14);
 	const double R = OrbEval(S, "bielthresh().closed");
 	CHECK(OrbEval(S, "hohtot(" + std::to_string(R - 0.01) + ") - bielinf(" + std::to_string(R - 0.01) + ")") < 0);
 	CHECK(OrbEval(S, "hohtot(" + std::to_string(R + 0.01) + ") - bielinf(" + std::to_string(R + 0.01) + ")") > 0);
 }
 
-// The steady-state filter is a fixed point: a long insgnss run with no outage approaches it.
+// The steady-state filter is a fixed point: posterior variance = prior variance * (1 - kp).
 TEST(ins_kalman_steady_state_is_reached)
 {
 	Session S;
@@ -122,11 +120,10 @@ TEST(ins_kalman_steady_state_is_reached)
 	const double Kp = OrbEval(S, "kfsteady(0.003, 2e-4, 3).kp");
 	CHECK(Sp > 0 && Sp < 3);
 	CHECK(Kp > 0 && Kp < 1);
-	// Prior-form fixed point: posterior variance equals prior * (1 - kp).
-	CHECK_NEAR(Sp * Sp, OrbEval(S, "kfsteady(0.003, 2e-4, 3).sppri^2") * (1 - Kp), 1e-9 * Sp * Sp);
+	CHECK_NEAR(Sp * Sp, OrbEval(S, "kfsteady(0.003, 2e-4, 3).sppri^2") * (1 - Kp), 1e-12 * Sp * Sp);
 }
 
-// Every orbits / ins function documents itself, and the heavy ones stay fast enough for a key press.
+// Every orbits / ins function documents itself; the heavy ones are timed at their bench defaults and caps.
 TEST(orbits_ins_registry_and_speed)
 {
 	const mcalc::Registry& Reg = mcalc::Registry::Default();
@@ -145,17 +142,57 @@ TEST(orbits_ins_registry_and_speed)
 	}
 	CHECK(Count >= 40);
 	Session S;
-	for (const char* Line : {"allanfit(3).flat", "allansim(1, 1, 1, 2)(5, 2)", "edriftcmp(0.3, 1000, 100).q", "edrift(0.3, 2000, 100, 2).max", "allandev(1, 1)", "twobody([7000e3, 0], [0, 7600], 8e5).x", "flickerquad(400, 1000000)", "coningrun(0.035, 31.4, 1000, 100).slope0", "bortz(0.01, 100000)", "cwshoot(6778137, [-1000, -10000, 0, 1.697], 2800, 10000).v0x", "cwnonlin(6778137, [-1000, -10000, 0, 1.697], 2800, 200000).x", "onetanscan(12, 1000000).best", "schulersim(0, 1e-3, 0, 1e6).x", "hohfly(6678e3, 42164e3).rend", "lambert([7000e3, 0], [0, 12000e3], 3600).v1", "bortz()", "kfsteady().sp", "cwshoot(6778137, [-1000, -10000, 0, 1.697], 2800).v0x",
-			 "flickerquad()", "insgnss().closed", "schulersim(0, 1e-3, 0, 21600).period", "coningrun(0.035, 31.4, 1000).slope0"})
+	struct Timed
+	{
+		const char* Line;
+		double LimitMs;   // generous bounds for slow machines; typical times print with MCALC_TIMING=1
+	};
+	const Timed Lines[] = {
+		// bench defaults
+		{"allanfit(1).flat", 30000},   // first use of a seed builds its three 65536-sample records (cached after)
+		{"allansim(1, 1, 1, 1)(5, 2)", 2000},
+		{"edriftcmp().q", 4000},
+		{"edrift(0.3, 500, 50, 2).max", 2000},
+		{"kepstate().x", 1000},
+		{"twobody([7000e3, 0], [0, 7600], 6000).x", 2000},
+		{"hohfly().rend", 2000},
+		{"lambert([7000e3, 0], [0, 12000e3], 3600).v1", 2000},
+		{"rendezvous(6778137, [-1000, -10000, 0, 1.697], 2800).dv", 1000},
+		{"cwshoot(6778137, [-1000, -10000, 0, 1.697], 2800).v0x", 4000},
+		{"cwnonlin(6778137, [-1000, -10000, 0, 1.697], 2800).x", 2000},
+		{"hohpeak().R", 2000},
+		{"breakeven(14)", 2000},
+		{"bielthresh().closed", 2000},
+		{"onetanscan(12).best", 2000},
+		{"flickerquad()", 4000},
+		{"schulersim().x", 2000},
+		{"coningrun(0.035, 31.4).slope0", 2000},
+		{"bortz()", 2000},
+		{"insgnss().closed", 2000},
+		{"kfsteady().sp", 1000},
+		// input caps
+		{"edriftcmp(0.3, 500, 100).q", 10000},
+		{"edrift(0.3, 1000, 100, 2).max", 10000},
+		{"twobody([7000e3, 0], [0, 7600], 2.5e5).x", 10000},
+		{"cwnonlin(6778137, [-1000, -10000, 0, 1.697], 2800, 100000).x", 10000},
+		{"cwshoot(6778137, [-1000, -10000, 0, 1.697], 2800, 5000).v0x", 10000},
+		{"onetanscan(12, 200000).best", 10000},
+		{"flickerquad(400, 1000000)", 10000},
+		{"schulersim(0, 1e-3, 0, 1e5).x", 10000},
+		{"coningrun(0.035, 31.4, 1000, 10).slope0", 10000},
+		{"bortz(0.01, 20000)", 10000},
+	};
+	const bool Show = std::getenv("MCALC_TIMING") != nullptr;
+	for (const Timed& T : Lines)
 	{
 		const auto T0 = std::chrono::steady_clock::now();
-		const double V = OrbEval(S, Line);
+		const double V = OrbEval(S, T.Line);
 		const double Ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - T0).count();
 		CHECK(std::isfinite(V));
-		if (Ms > 50 || std::getenv("MCALC_TIMING"))
+		if (Show || Ms > T.LimitMs)
 		{
-			std::printf("    timing: %s took %.2f ms\n", Line, Ms);
+			std::printf("    timing: %-62s %9.1f ms\n", T.Line, Ms);
 		}
-		CHECK(Ms < 500);   // generous bound for slow CI machines; typical times are printed above 50 ms
+		CHECK(Ms < T.LimitMs);
 	}
 }

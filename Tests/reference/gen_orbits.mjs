@@ -334,7 +334,11 @@ lines.push('# ins: coning drift and the two-sample correction');
 {
   for (const [deg, f, rate] of [[2, 5, 200], [5, 10, 100], [1, 2, 1000]]) {
     const al = deg * Math.PI / 180, W = TAU * f, h = 1 / rate;
-    add(`coning0(${al}, ${W}, ${h})`, I.drift0(al, W, h), 'rel:1e-13', 'Ins.drift0');
+    // 1 - sin(x)/x cancels ~x^2/6: at x = W h = 0.0126 the IEEE double keeps ~11 digits (err 1.4e-12 vs
+    // 50-digit mpmath) and the 18-digit gears ~13 (err 1.2e-13), so that case compares at 1e-11.
+    const small = W * h < 0.05;
+    add(`coning0(${al}, ${W}, ${h})`, I.drift0(al, W, h), small ? 'rel:1e-11' : 'rel:1e-13',
+      small ? 'Ins.drift0; 18-digit decimal vs IEEE double: cancellation ~1e5 in 1 - sin(x)/x' : 'Ins.drift0');
     add(`coning2(${al}, ${W}, ${h})`, I.drift2(al, W, h), 'rel:1e-13', 'Ins.drift2');
     if (rate <= 200) {
       const run = I.coningRun(al, W, rate), ex = `coningrun(${al}, ${W}, ${rate})`;
