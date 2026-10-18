@@ -30,34 +30,23 @@ void Tap(mkb::CalculatorDevice& Dev, const char* Id)
 // Types a string by pressing the physical keys, holding shift where the character needs it.
 void TypeKeys(mkb::CalculatorDevice& Dev, const std::string& Text)
 {
-	const mkb::Layout& L = mkb::FullSizeAnsi();
 	for (char Ch : Text)
 	{
-		const std::string S(1, Ch);
-		const mkb::KeyDef* Plain = nullptr;
-		const mkb::KeyDef* Shifted = nullptr;
-		for (const mkb::KeyDef& Key : L.Keys)
-		{
-			if (Key.Role == mkb::KeyRole::Numpad || Key.Action != mkb::KeyAction::Insert)
-			{
-				continue;
-			}
-			if (Key.Insert == S && !Plain) Plain = &Key;
-			if (Key.ShiftInsert == S && Key.Insert != S && !Shifted) Shifted = &Key;
-		}
-		if (Plain)
-		{
-			Tap(Dev, Plain->Id.c_str());
-		}
-		else if (Shifted)
-		{
-			Dev.Press(K("LShift"));
-			Tap(Dev, Shifted->Id.c_str());
-			Dev.Release(K("LShift"));
-		}
-		else
+		bool Shift = false;
+		const mkb::KeyDef* Key = mkb::FullSizeAnsi().KeyForChar(Ch, &Shift);
+		if (!Key)
 		{
 			std::printf("    cannot type '%c'\n", Ch);
+			continue;
+		}
+		if (Shift)
+		{
+			Dev.Press(K("LShift"));
+		}
+		Tap(Dev, Key->Id.c_str());
+		if (Shift)
+		{
+			Dev.Release(K("LShift"));
 		}
 	}
 }
