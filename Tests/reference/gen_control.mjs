@@ -217,25 +217,25 @@ emit(setL + "retdiff(Ad, Bd, K)", Ap.returnDifferenceMin(D), "rel:1e-9", "approa
 }
 for (const g of ["lqr", "lqg", "pid"]) {
   const mode = { lqr: 1, lqg: 2, pid: 3 }[g], c = Ap.closedCov(D, g);
-  emit(`glide(${mode}).sd`, c.sd, "rel:1e-8", `approach.js closedCov("${g}"): sigma of d at the decision height (test: 0.5615 / 0.6751 / 0.9535)`);
-  emit(`glide(${mode}).J`, c.J, "rel:1e-8", `approach.js closedCov("${g}"): cost E[x'Qx + u'Ru] (test 0.969 / 1.196 / 1.706)`);
-  emit(`glide(${mode}).su`, c.su * DEG, "rel:1e-8", `approach.js closedCov("${g}"): command sigma, converted from degrees`);
-  emit(`glide(${mode}).rho`, c.rho, "rel:1e-10", `approach.js closedCov("${g}"): spectral radius`);
-  emit(`glide(${mode}).hi`, mg[g][1], "rel:1e-7", `approach.js margins(): upper gain edge of the ${g} loop (LQR 8.174, LQG 2.860)`);
-  emit(`glide(${mode}).lo`, mg[g][0], "rel:1e-7", `approach.js margins(): lower gain edge of the ${g} loop`);
+  emit(`approach(${mode}).sd`, c.sd, "rel:1e-8", `approach.js closedCov("${g}"): sigma of d at the decision height (test: 0.5615 / 0.6751 / 0.9535)`);
+  emit(`approach(${mode}).J`, c.J, "rel:1e-8", `approach.js closedCov("${g}"): cost E[x'Qx + u'Ru] (test 0.969 / 1.196 / 1.706)`);
+  emit(`approach(${mode}).su`, c.su * DEG, "rel:1e-8", `approach.js closedCov("${g}"): command sigma, converted from degrees`);
+  emit(`approach(${mode}).rho`, c.rho, "rel:1e-10", `approach.js closedCov("${g}"): spectral radius`);
+  emit(`approach(${mode}).hi`, mg[g][1], "rel:1e-7", `approach.js margins(): upper gain edge of the ${g} loop (LQR 8.174, LQG 2.860)`);
+  emit(`approach(${mode}).lo`, mg[g][0], "rel:1e-7", `approach.js margins(): lower gain edge of the ${g} loop`);
 }
-emit("glide().rd", Ap.returnDifferenceMin(D), "rel:1e-9", "approach.js returnDifferenceMin()");
-emit("glide().glo", mg.guar[0], "rel:1e-8", "approach.js margins(): guaranteed interval");
-emit("glide().ghi", mg.guar[1], "rel:1e-7", "approach.js margins(): guaranteed interval");
+emit("approach().rd", Ap.returnDifferenceMin(D), "rel:1e-9", "approach.js returnDifferenceMin()");
+emit("approach().glo", mg.guar[0], "rel:1e-8", "approach.js margins(): guaranteed interval");
+emit("approach().ghi", mg.guar[1], "rel:1e-7", "approach.js margins(): guaranteed interval");
 { // other noise settings: the filter changes, the regulator does not
   const p = { ...Ap.DEF, sg: 0.5, sd: 1, tau: 6 }, D2 = Ap.design(p), c = Ap.closedCov(D2, "lqg"), m2 = Ap.margins(D2);
-  emit("glide(2, 0.5, 6, 1, 0.3).sd", c.sd, "rel:1e-8", "approach.js closedCov(): sg 0.5, tau 6, sd 1");
-  emit("glide(2, 0.5, 6, 1, 0.3).hi", m2.lqg[1], "rel:1e-7", "approach.js margins(): LQG upper edge, sg 0.5, tau 6, sd 1");
+  emit("approach(2, 0.5, 6, 1, 0.3).sd", c.sd, "rel:1e-8", "approach.js closedCov(): sg 0.5, tau 6, sd 1");
+  emit("approach(2, 0.5, 6, 1, 0.3).hi", m2.lqg[1], "rel:1e-7", "approach.js margins(): LQG upper edge, sg 0.5, tau 6, sd 1");
   const c3 = Ap.closedCov(Ap.design({ ...Ap.DEF, sg: 3 }), "pid");
-  emit("glide(3, 3).J", c3.J, "rel:1e-8", "approach.js closedCov(\"pid\"): gust sigma 3 m/s");
+  emit("approach(3, 3).J", c3.J, "rel:1e-8", "approach.js closedCov(\"pid\"): gust sigma 3 m/s");
 }
-err("glide(4)", "mode must be 1, 2 or 3");
-err("glide(2, 0)", "sg must be > 0");
+err("approach(4)", "mode must be 1, 2 or 3");
+err("approach(2, 0)", "sg must be > 0");
 for (const q of [1, 100, 1e4]) {
   const d = Ap.doyle(q);
   emit(`doyle(${q}).lo`, d.lqg[0], "rel:1e-7", `approach.js doyle(${q}): LQG lower gain edge (test q = 1: 0.9208, q = 1e4: 0.9905)`);

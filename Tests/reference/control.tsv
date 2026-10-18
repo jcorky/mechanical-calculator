@@ -214,32 +214,32 @@ Ac = [0, 1, 0, 0, 1; 0, 0, 70.5, 0, 0; 0, 0, 0, 1, 0; 0, 0, -19.0969, -5.244, 0;
 Ac = [0, 1, 0, 0, 1; 0, 0, 70.5, 0, 0; 0, 0, 0, 1, 0; 0, 0, -19.0969, -5.244, 0; 0, 0, 0, 0, -0.25]; Bc = [0; 0; 0; 19.0969; 0]; Q = [1, 0, 0, 0, 0; 0, 0.4444444444444444, 0, 0, 0.4444444444444444; 0, 0, 0, 0, 0; 0, 0, 0, 0, 0; 0, 0.4444444444444444, 0, 0, 0.4444444444444444]; Ru = 820.701587502936; lqr(Ac, Bc, Q, Ru)(4)	0.1368143455544542	rel:1e-7	approach.js care(): continuous LQR by Newton-Kleinman
 Ac = [0, 1, 0, 0, 1; 0, 0, 70.5, 0, 0; 0, 0, 0, 1, 0; 0, 0, -19.0969, -5.244, 0; 0, 0, 0, 0, -0.25]; Bc = [0; 0; 0; 19.0969; 0]; Q = [1, 0, 0, 0, 0; 0, 0.4444444444444444, 0, 0, 0.4444444444444444; 0, 0, 0, 0, 0; 0, 0, 0, 0, 0; 0, 0.4444444444444444, 0, 0, 0.4444444444444444]; Ru = 820.701587502936; lqr(Ac, Bc, Q, Ru)(5)	0.04287927165806492	rel:1e-7	approach.js care(): continuous LQR by Newton-Kleinman
 Ac = [0, 1, 0, 0, 1; 0, 0, 70.5, 0, 0; 0, 0, 0, 1, 0; 0, 0, -19.0969, -5.244, 0; 0, 0, 0, 0, -0.25]; Bc = [0; 0; 0; 19.0969; 0]; Q = [1, 0, 0, 0, 0; 0, 0.4444444444444444, 0, 0, 0.4444444444444444; 0, 0, 0, 0, 0; 0, 0, 0, 0, 0; 0, 0.4444444444444444, 0, 0, 0.4444444444444444]; Ru = 820.701587502936; care(Ac, Bc, Q, Ru)(1, 1)	1.4090722642371065	rel:1e-7	approach.js care(): P
-glide(1).sd	0.5614589320849608	rel:1e-8	approach.js closedCov("lqr"): sigma of d at the decision height (test: 0.5615 / 0.6751 / 0.9535)
-glide(1).J	0.9691839007747965	rel:1e-8	approach.js closedCov("lqr"): cost E[x'Qx + u'Ru] (test 0.969 / 1.196 / 1.706)
-glide(1).su	0.021950425613335267	rel:1e-8	approach.js closedCov("lqr"): command sigma, converted from degrees
-glide(1).rho	0.9753099120283325	rel:1e-10	approach.js closedCov("lqr"): spectral radius
-glide(1).hi	8.174370146252942	rel:1e-7	approach.js margins(): upper gain edge of the lqr loop (LQR 8.174, LQG 2.860)
-glide(1).lo	0.001	rel:1e-7	approach.js margins(): lower gain edge of the lqr loop
-glide(2).sd	0.6751365595296565	rel:1e-8	approach.js closedCov("lqg"): sigma of d at the decision height (test: 0.5615 / 0.6751 / 0.9535)
-glide(2).J	1.1963903092435428	rel:1e-8	approach.js closedCov("lqg"): cost E[x'Qx + u'Ru] (test 0.969 / 1.196 / 1.706)
-glide(2).su	0.02317572514963939	rel:1e-8	approach.js closedCov("lqg"): command sigma, converted from degrees
-glide(2).rho	0.9951231078596922	rel:1e-10	approach.js closedCov("lqg"): spectral radius
-glide(2).hi	2.860048433043729	rel:1e-7	approach.js margins(): upper gain edge of the lqg loop (LQR 8.174, LQG 2.860)
-glide(2).lo	0.001	rel:1e-7	approach.js margins(): lower gain edge of the lqg loop
-glide(3).sd	0.9535381461540112	rel:1e-8	approach.js closedCov("pid"): sigma of d at the decision height (test: 0.5615 / 0.6751 / 0.9535)
-glide(3).J	1.7059525542350475	rel:1e-8	approach.js closedCov("pid"): cost E[x'Qx + u'Ru] (test 0.969 / 1.196 / 1.706)
-glide(3).su	0.022874671350453037	rel:1e-8	approach.js closedCov("pid"): command sigma, converted from degrees
-glide(3).rho	0.9822905022036987	rel:1e-10	approach.js closedCov("pid"): spectral radius
-glide(3).hi	2.796517616397174	rel:1e-7	approach.js margins(): upper gain edge of the pid loop (LQR 8.174, LQG 2.860)
-glide(3).lo	0.07876441694709889	rel:1e-7	approach.js margins(): lower gain edge of the pid loop
-glide().rd	0.8776664156248917	rel:1e-9	approach.js returnDifferenceMin()
-glide().glo	0.5325761716561457	rel:1e-8	approach.js margins(): guaranteed interval
-glide().ghi	8.17432105401605	rel:1e-7	approach.js margins(): guaranteed interval
-glide(2, 0.5, 6, 1, 0.3).sd	0.33046139938730074	rel:1e-8	approach.js closedCov(): sg 0.5, tau 6, sd 1
-glide(2, 0.5, 6, 1, 0.3).hi	2.6142632622863515	rel:1e-7	approach.js margins(): LQG upper edge, sg 0.5, tau 6, sd 1
-glide(3, 3).J	5.685128181061891	rel:1e-8	approach.js closedCov("pid"): gust sigma 3 m/s
-glide(4)	error	abs:0	mode must be 1, 2 or 3
-glide(2, 0)	error	abs:0	sg must be > 0
+approach(1).sd	0.5614589320849608	rel:1e-8	approach.js closedCov("lqr"): sigma of d at the decision height (test: 0.5615 / 0.6751 / 0.9535)
+approach(1).J	0.9691839007747965	rel:1e-8	approach.js closedCov("lqr"): cost E[x'Qx + u'Ru] (test 0.969 / 1.196 / 1.706)
+approach(1).su	0.021950425613335267	rel:1e-8	approach.js closedCov("lqr"): command sigma, converted from degrees
+approach(1).rho	0.9753099120283325	rel:1e-10	approach.js closedCov("lqr"): spectral radius
+approach(1).hi	8.174370146252942	rel:1e-7	approach.js margins(): upper gain edge of the lqr loop (LQR 8.174, LQG 2.860)
+approach(1).lo	0.001	rel:1e-7	approach.js margins(): lower gain edge of the lqr loop
+approach(2).sd	0.6751365595296565	rel:1e-8	approach.js closedCov("lqg"): sigma of d at the decision height (test: 0.5615 / 0.6751 / 0.9535)
+approach(2).J	1.1963903092435428	rel:1e-8	approach.js closedCov("lqg"): cost E[x'Qx + u'Ru] (test 0.969 / 1.196 / 1.706)
+approach(2).su	0.02317572514963939	rel:1e-8	approach.js closedCov("lqg"): command sigma, converted from degrees
+approach(2).rho	0.9951231078596922	rel:1e-10	approach.js closedCov("lqg"): spectral radius
+approach(2).hi	2.860048433043729	rel:1e-7	approach.js margins(): upper gain edge of the lqg loop (LQR 8.174, LQG 2.860)
+approach(2).lo	0.001	rel:1e-7	approach.js margins(): lower gain edge of the lqg loop
+approach(3).sd	0.9535381461540112	rel:1e-8	approach.js closedCov("pid"): sigma of d at the decision height (test: 0.5615 / 0.6751 / 0.9535)
+approach(3).J	1.7059525542350475	rel:1e-8	approach.js closedCov("pid"): cost E[x'Qx + u'Ru] (test 0.969 / 1.196 / 1.706)
+approach(3).su	0.022874671350453037	rel:1e-8	approach.js closedCov("pid"): command sigma, converted from degrees
+approach(3).rho	0.9822905022036987	rel:1e-10	approach.js closedCov("pid"): spectral radius
+approach(3).hi	2.796517616397174	rel:1e-7	approach.js margins(): upper gain edge of the pid loop (LQR 8.174, LQG 2.860)
+approach(3).lo	0.07876441694709889	rel:1e-7	approach.js margins(): lower gain edge of the pid loop
+approach().rd	0.8776664156248917	rel:1e-9	approach.js returnDifferenceMin()
+approach().glo	0.5325761716561457	rel:1e-8	approach.js margins(): guaranteed interval
+approach().ghi	8.17432105401605	rel:1e-7	approach.js margins(): guaranteed interval
+approach(2, 0.5, 6, 1, 0.3).sd	0.33046139938730074	rel:1e-8	approach.js closedCov(): sg 0.5, tau 6, sd 1
+approach(2, 0.5, 6, 1, 0.3).hi	2.6142632622863515	rel:1e-7	approach.js margins(): LQG upper edge, sg 0.5, tau 6, sd 1
+approach(3, 3).J	5.685128181061891	rel:1e-8	approach.js closedCov("pid"): gust sigma 3 m/s
+approach(4)	error	abs:0	mode must be 1, 2 or 3
+approach(2, 0)	error	abs:0	sg must be > 0
 doyle(1).lo	0.9208440873875441	rel:1e-7	approach.js doyle(1): LQG lower gain edge (test q = 1: 0.9208, q = 1e4: 0.9905)
 doyle(1).hi	1.0557280900008423	rel:1e-7	approach.js doyle(1): LQG upper gain edge (test q = 1: 1.0557, q = 1e4: 1.0001)
 doyle(1).rlo	0.47213595499957944	rel:1e-7	approach.js doyle(1): LQR lower edge, below 1/2

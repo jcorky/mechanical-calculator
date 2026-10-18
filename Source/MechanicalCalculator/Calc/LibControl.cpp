@@ -2529,7 +2529,7 @@ void RegisterControlLibrary(Registry& R)
 		{Mat("A", "-"), Mat("B", "-"), Mat("C", "-"), Mat("K", "-"), Mat("M", "-"), Num("g", "-", 1)}, &LqgCl);
 	Def(R, "doyle", "control", "approach/ section 5: Doyle's 1978 example", "Doyle's LQG example: gains f, d and the stable input-gain interval of LQG and of LQR", "record f, d, lo, hi (LQG), rlo, rhi (LQR)",
 		{Num("q", "-", 100), Num("sigma", "- (nan: = q)", CtlNan)}, &Doyle);
-	Def(R, "glide", "control", "approach/ sections 4 and 5: dispersion and margins", "glideslope approach: stationary dispersion and gain interval of 1 LQR, 2 LQG, 3 PID", "record sd (m), J, su (rad), rho, lo, hi, rd, rq, glo, ghi",
+	Def(R, "approach", "control", "approach/ sections 4 and 5: dispersion and margins", "glideslope approach: stationary dispersion and gain interval of 1 LQR, 2 LQG, 3 PID", "record sd (m), J, su (rad), rho, lo, hi, rd, rq, glo, ghi",
 		{Num("mode", "-", 2), Num("sg", "m/s", 1.5), Num("tau", "s", 4), Num("sd", "m", 2), Num("sv", "m/s", 0.3)}, &Glide);
 	Def(R, "lanesat", "control", "mpc/ section 2: saturated LQR lane change", "lane change by LQR clipped to |u| <= umax (150 steps of 0.2 s)", "record J, os (overshoot, m)",
 		{Num("umax", "m/s^2", 1), Num("y0", "m", 3.5), Num("r", "-", 0.01)}, &LaneSat);
