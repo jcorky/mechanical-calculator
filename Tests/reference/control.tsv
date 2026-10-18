@@ -470,6 +470,7 @@ lander(22, 60, 12, 3, 3).vel	-12	rel:1e-9	mpc section 3: velocity there
 lander(22, 60, 12, 3, 3).alt - lander(22, 60, 12, 3, 3).vel^2/(2*3)	36	rel:1e-9	mpc section 3: full braking from there still goes below the ground
 lander(22, 40, 8, 2, 4)	error	abs:0	mode must be 0..3
 lander(22, 40, 8, 0)	error	abs:0	braking limit must be > 0
+lander(41)	error	abs:0	N <= 40, the bench's horizon range (gear arithmetic: about 1 s at N = 40)
 # dynamics: region of attraction (ch08 bench, page cycle())
 roa().basin	13.72210540092721	rel:1e-9	ch08 page cycle(): area inside the unstable limit cycle (page: 13.72)
 roa().c	2.305	abs:0.002	ch08 page and phase9: V < 2.305 with Q = I (grid of 1440 rays)
@@ -546,9 +547,9 @@ nomoto(5)	error	abs:0	ctrl must be 1..4
 # dynamics: the logistic map (ch08 page lyapExp(), period(), superstable(), feigenbaum())
 lyapexp(3.83)	-0.3697549043990086	rel:1e-11	ch08 page lyapExp(3.83)
 logperiod(3.83)	3	abs:0	ch08 page period(3.83)
-lyapexp(3.7)	0.3538480007721683	rel:1e-11	ch08 page lyapExp(3.7)
+lyapexp(3.7)	0.3538480007721683	abs:5e-3	ch08 page lyapExp(3.7); chaotic: 18-digit decimal and IEEE double orbits decorrelate after ~55 steps, so the 20000-step average agrees only to its sampling error (mpmath at 7000 digits: r = 4 exact 0.6931401, double 0.6931585, gear 0.6933136)
 logperiod(3.7)	0	abs:0	ch08 page period(3.7): chaotic, none found
-lyapexp(4)	0.6931585448071765	rel:1e-11	ch08 page lyapExp(4)
+lyapexp(4)	0.6931585448071765	abs:5e-3	ch08 page lyapExp(4); chaotic: 18-digit decimal and IEEE double orbits decorrelate after ~55 steps, so the 20000-step average agrees only to its sampling error (mpmath at 7000 digits: r = 4 exact 0.6931401, double 0.6931585, gear 0.6933136)
 logperiod(4)	0	abs:0	ch08 page period(4): chaotic, none found
 lyapexp(3.2)	-0.9162907318740714	rel:1e-11	ch08 page lyapExp(3.2)
 logperiod(3.2)	2	abs:0	ch08 page period(3.2)
@@ -582,6 +583,7 @@ superstab(8)	3.569939	abs:1e-5	phase9 claim 6: accumulation r = 3.569939
 superstab(13)	error	abs:0	n <= 12
 feigen(1)	error	abs:0	n >= 2
 lyapexp(4, 0)	error	abs:0	n >= 1
+lyapexp(4, 3e5)	error	abs:0	n <= 2e5 (gear arithmetic: about 1.4 s at the cap)
 logmap(2, 0.3, 5)	0.49999999999990774	rel:1e-12	closed form at r = 2: x_n = (1 - (1 - 2 x0)^(2^n))/2
 logmap(2, 0.1, 10)	0.5	rel:1e-12	closed form at r = 2: x_n = (1 - (1 - 2 x0)^(2^n))/2
 logmap(2, 0.9, 3)	0.41611391999999997	rel:1e-12	closed form at r = 2: x_n = (1 - (1 - 2 x0)^(2^n))/2

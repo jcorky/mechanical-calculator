@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <limits>
 #include <string>
 #include <vector>
 
@@ -13,8 +12,6 @@ namespace mcalc
 {
 namespace control_detail
 {
-constexpr double CtlInf = std::numeric_limits<double>::infinity();
-constexpr double CtlNan = std::numeric_limits<double>::quiet_NaN();
 
 /* ---------- shapes and small linear-algebra helpers ---------- */
 
@@ -77,9 +74,9 @@ bool CheckFilter(const Matrix& A, const Matrix& Cm, const Matrix& Q, const Matri
 	return true;
 }
 
-bool IsWhole(double X, double Lo, double Hi)
+bool IsWhole(Real X, Real Lo, Real Hi)
 {
-	return std::isfinite(X) && X == std::floor(X) && X >= Lo && X <= Hi;
+	return gm::isfinite(X) && X == gm::floor(X) && X >= Lo && X <= Hi;
 }
 
 // A vector of length n given as a row or a column, returned as a column.
@@ -137,13 +134,13 @@ Matrix SubBlock(const Matrix& A, int R0, int C0, int Rows, int Cols)
 }
 
 // Largest real part of the eigenvalues; NaN if the iteration fails.
-double MaxRealPart(const Matrix& A)
+Real MaxRealPart(const Matrix& A)
 {
-	std::vector<double> Re, Im;
+	std::vector<Real> Re, Im;
 	std::string E;
 	if (!la::Eigenvalues(A, &Re, &Im, &E) || Re.empty())
 	{
-		return CtlNan;
+		return Real::NaN();
 	}
 	return *std::max_element(Re.begin(), Re.end());
 }
@@ -203,23 +200,23 @@ bool SteadyKalman(const Matrix& A, const Matrix& Cm, const Matrix& Q, const Matr
 // The connected interval of input gains around 1 on which Fn(g) < 1 (approach bench, margins()): march
 // outward on a log grid of N/2 steps per decade-range, then bisect geometrically.
 template <typename Fn>
-double GainEdge(const Fn& F, double End, int N)
+Real GainEdge(const Fn& F, Real End, int N)
 {
-	const double K = std::log(End) / N * 2;
-	double Gin = 1.0;
+	const Real K = gm::log(End) / N * 2;
+	Real Gin = 1.0;
 	for (int i = 1; i <= N; ++i)
 	{
-		const double G = std::exp(K * i);
+		const Real G = gm::exp(K * i);
 		if ((End > 1 && G > End) || (End < 1 && G < End))
 		{
 			return End;
 		}
 		if (!(F(G) < 1))
 		{
-			double Gout = G;
+			Real Gout = G;
 			for (int j = 0; j < 50; ++j)
 			{
-				const double Mid = std::sqrt(Gin * Gout);
+				const Real Mid = gm::sqrt(Gin * Gout);
 				if (F(Mid) < 1)
 				{
 					Gin = Mid;
@@ -237,7 +234,7 @@ double GainEdge(const Fn& F, double End, int N)
 }
 
 template <typename Fn>
-bool GainInterval(const Fn& F, double Lo, double Hi, int N, double* OutLo, double* OutHi)
+bool GainInterval(const Fn& F, Real Lo, Real Hi, int N, Real* OutLo, Real* OutHi)
 {
 	if (!(F(1.0) < 1))
 	{
@@ -248,17 +245,24 @@ bool GainInterval(const Fn& F, double Lo, double Hi, int N, double* OutLo, doubl
 	return true;
 }
 
-// LQG loop in (x, prior estimate) with a current-estimate law u = -K xhat+ and gain g at the plant input.
-Matrix LqgLoop(const Matrix& A, const Matrix& B, const Matrix& Cm, const Matrix& K, const Matrix& M, double G)
+// LQG loop in (x, prior estimate) with a current-estimate law u = -K xhat+ and gain g at the plant input:
+// Base - g Dir, with Dir = [B K M C, B K (I - MC); 0, 0] the part the input gain multiplies.
+void LqgParts(const Matrix& A, const Matrix& B, const Matrix& Cm, const Matrix& K, const Matrix& M, Matrix* Base, Matrix* Dir)
 {
 	const int N = A.Rows;
 	const Matrix I = Matrix::Identity(N);
 	const Matrix MC = la::Mul(M, Cm);
-	const Matrix KM = la::Mul(K, MC);
-	const Matrix KI = la::Mul(K, la::Sub(I, MC));
-	const Matrix BKM = la::Mul(B, KM);
-	const Matrix BKI = la::Mul(B, KI);
-	return Block(la::Sub(A, la::Scale(BKM, G)), la::Scale(BKI, -G), la::Sub(la::Mul(A, MC), BKM), la::Sub(la::Mul(A, la::Sub(I, MC)), BKI));
+	const Matrix BKM = la::Mul(B, la::Mul(K, MC));
+	const Matrix BKI = la::Mul(B, la::Mul(K, la::Sub(I, MC)));
+	*Base = Block(A, Matrix(N, N), la::Sub(la::Mul(A, MC), BKM), la::Sub(la::Mul(A, la::Sub(I, MC)), BKI));
+	*Dir = Block(BKM, BKI, Matrix(N, N), Matrix(N, N));
+}
+
+Matrix LqgLoop(const Matrix& A, const Matrix& B, const Matrix& Cm, const Matrix& K, const Matrix& M, Real G)
+{
+	Matrix Base, Dir;
+	LqgParts(A, B, Cm, K, M, &Base, &Dir);
+	return la::Sub(Base, la::Scale(Dir, G));
 }
 
 // sign(Z) by the scaled Newton iteration Z <- (cZ + Z^-1/c)/2.
@@ -274,17 +278,17 @@ bool MatrixSign(const Matrix& InZ, Matrix* Out, std::string* Err)
 			*Err = "the Hamiltonian has eigenvalues on the imaginary axis";
 			return false;
 		}
-		double D = 0.0;
+		Real D = 0.0;
 		la::Determinant(Z, &D, nullptr);
-		double Cs = std::pow(std::fabs(D), -1.0 / N2);
-		if (!std::isfinite(Cs) || Cs <= 0.0)
+		Real Cs = gm::pow(gm::fabs(D), Real(-1) / Real(N2));
+		if (!gm::isfinite(Cs) || Cs <= 0.0)
 		{
 			Cs = 1.0;
 		}
 		const Matrix Zn = la::Scale(la::Add(la::Scale(Z, Cs), la::Scale(Zi, 1.0 / Cs)), 0.5);
-		const double Change = la::MaxAbs(la::Sub(Zn, Z));
+		const Real Change = la::MaxAbs(la::Sub(Zn, Z));
 		Z = Zn;
-		if (Change <= 1e-13 * std::max(1.0, la::MaxAbs(Z)))
+		if (Change <= 1e-13 * gm::max(1.0, la::MaxAbs(Z)))
 		{
 			*Out = Z;
 			return true;
@@ -298,48 +302,48 @@ bool MatrixSign(const Matrix& InZ, Matrix* Out, std::string* Err)
 
 struct Mob
 {
-	double A, B, C, D;
+	Real A, B, C, D;
 };
 
 // Scalar Kalman covariance update P -> a^2 r P/(h^2 P + r) + q as the Mobius map of M (atlas Phase 1).
-Mob KalmanMob(double Av, double Q, double R, double H)
+Mob KalmanMob(Real Av, Real Q, Real R, Real H)
 {
 	return {Av * Av * R + Q * H * H, Q * R, H * H, R};
 }
 
-double MobApply(const Mob& M, double Z)
+Real MobApply(const Mob& M, Real Z)
 {
-	if (std::isinf(Z))
+	if (gm::isinf(Z))
 	{
-		return M.C != 0.0 ? M.A / M.C : CtlInf;
+		return M.C != 0.0 ? M.A / M.C : Real::Infinity();
 	}
-	const double Den = M.C * Z + M.D;
+	const Real Den = M.C * Z + M.D;
 	if (Den == 0.0)
 	{
-		return CtlInf;
+		return Real::Infinity();
 	}
 	return (M.A * Z + M.B) / Den;
 }
 
 struct FixedPoints
 {
-	double Plus = CtlNan;   // attracting, the larger eigenvalue C p + D
-	double Minus = CtlNan;
-	double Mult = CtlNan;   // f'(Plus) = det M / (C Plus + D)^2
+	Real Plus = Real::NaN();   // attracting, the larger eigenvalue C p + D
+	Real Minus = Real::NaN();
+	Real Mult = Real::NaN();   // f'(Plus) = det M / (C Plus + D)^2
 };
 
 // The fixed points of a map with C != 0 and real fixed points.
 bool MobFixed(const Mob& M, FixedPoints* Out)
 {
-	const double Disc = (M.A - M.D) * (M.A - M.D) + 4 * M.B * M.C;
+	const Real Disc = (M.A - M.D) * (M.A - M.D) + 4 * M.B * M.C;
 	if (M.C == 0.0 || Disc < 0.0)
 	{
 		return false;
 	}
-	const double Sq = std::sqrt(Disc);
+	const Real Sq = gm::sqrt(Disc);
 	Out->Plus = ((M.A - M.D) + Sq) / (2 * M.C);
 	Out->Minus = ((M.A - M.D) - Sq) / (2 * M.C);
-	const double Den = M.C * Out->Plus + M.D;
+	const Real Den = M.C * Out->Plus + M.D;
 	Out->Mult = (M.A * M.D - M.B * M.C) / (Den * Den);
 	return true;
 }
@@ -356,8 +360,8 @@ Result KfIter(const Call& C)
 		return Result::Fail("k must be a whole number 0..1e6");
 	}
 	const Mob M = KalmanMob(C.N(2), C.N(3), C.N(4), C.N(5));
-	double P = C.N(1);
-	const long long K = static_cast<long long>(C.N(0));
+	Real P = C.N(1);
+	const long long K = C.N(0).ToLong();
 	for (long long i = 0; i < K; ++i)
 	{
 		P = MobApply(M, P);
@@ -366,7 +370,7 @@ Result KfIter(const Call& C)
 }
 
 // Steady state of the scalar Riccati map in either reading. The gain uses the reading's own formula.
-Result ScalarSteady(double Av, double Q, double R, double H, bool Regulator)
+Result ScalarSteady(Real Av, Real Q, Real R, Real H, bool Regulator)
 {
 	if (R <= 0.0)
 	{
@@ -378,16 +382,16 @@ Result ScalarSteady(double Av, double Q, double R, double H, bool Regulator)
 	}
 	const Mob M = KalmanMob(Av, Q, R, H);
 	FixedPoints Fp;
-	double K = 0.0, Pole = Av, P = 0.0;
+	Real K = 0.0, Pole = Av, P = 0.0;
 	if (H == 0.0)
 	{
-		if (std::fabs(Av) >= 1.0)
+		if (gm::fabs(Av) >= 1.0)
 		{
 			return Result::Fail(Regulator ? "b = 0 and |a| >= 1: the input cannot reach an unstable state, the cost diverges" : "h = 0 and |a| >= 1: nothing is observed, the variance diverges");
 		}
 		P = Q / (1.0 - Av * Av);
 		Fp.Plus = P;
-		Fp.Minus = CtlInf;
+		Fp.Minus = Real::Infinity();
 		Fp.Mult = Av * Av;
 	}
 	else
@@ -423,12 +427,12 @@ Result KfW(const Call& C)
 	{
 		return Result::Fail("h = 0: one fixed point at infinity, no cross-ratio");
 	}
-	const double Tr = M.A + M.D, Det = M.A * M.D - M.B * M.C;
-	if (std::fabs(Tr * Tr - 4 * Det) < 1e-9 * (Tr * Tr + 1))
+	const Real Tr = M.A + M.D, Det = M.A * M.D - M.B * M.C;
+	if (gm::fabs(Tr * Tr - 4 * Det) < 1e-9 * (Tr * Tr + 1))
 	{
 		return Result::Fail("parabolic (|a| = 1, q = 0): no second fixed point; 1/P grows by h^2/r per step instead");
 	}
-	const double P = C.N(0);
+	const Real P = C.N(0);
 	return Result::Of((P - Fp.Plus) / (P - Fp.Minus));
 }
 
@@ -445,8 +449,8 @@ Result MobIter(const Call& C)
 		return Result::Fail("k must be a whole number 0..1e6");
 	}
 	const Mob M = {C.N(2), C.N(3), C.N(4), C.N(5)};
-	double Z = C.N(1);
-	const long long K = static_cast<long long>(C.N(0));
+	Real Z = C.N(1);
+	const long long K = C.N(0).ToLong();
 	for (long long i = 0; i < K; ++i)
 	{
 		Z = MobApply(M, Z);
@@ -458,19 +462,19 @@ Result MobIter(const Call& C)
 // 3 hyperbolic, 4 elliptic; fixed points, the attracting one and its multiplier, the elliptic rotation.
 Result MobClass(const Call& C)
 {
-	const double A = C.N(0), B = C.N(1), Cc = C.N(2), D = C.N(3);
-	const double Tr = A + D, Det = A * D - B * Cc, Disc = Tr * Tr - 4 * Det;
-	const double Scale = std::max(1e-9, Tr * Tr + std::fabs(Det));
+	const Real A = C.N(0), B = C.N(1), Cc = C.N(2), D = C.N(3);
+	const Real Tr = A + D, Det = A * D - B * Cc, Disc = Tr * Tr - 4 * Det;
+	const Real Scale = gm::max(1e-9, Tr * Tr + gm::fabs(Det));
 	int Type = 3;
-	if (std::fabs(Det) < 1e-12)
+	if (gm::fabs(Det) < 1e-12)
 	{
 		Type = 0;
 	}
-	else if (std::fabs(B) < 1e-12 && std::fabs(Cc) < 1e-12 && std::fabs(A - D) < 1e-12)
+	else if (gm::fabs(B) < 1e-12 && gm::fabs(Cc) < 1e-12 && gm::fabs(A - D) < 1e-12)
 	{
 		Type = 1;
 	}
-	else if (std::fabs(Disc) < 1e-9 * Scale)
+	else if (gm::fabs(Disc) < 1e-9 * Scale)
 	{
 		Type = 2;
 	}
@@ -478,33 +482,33 @@ Result MobClass(const Call& C)
 	{
 		Type = Disc > 0 ? 3 : 4;
 	}
-	std::vector<double> Fps;
+	std::vector<Real> Fps;
 	if (Type >= 2)
 	{
-		if (std::fabs(Cc) < 1e-12)
+		if (gm::fabs(Cc) < 1e-12)
 		{
-			Fps.push_back(CtlInf);
-			if (std::fabs(D - A) > 1e-12)
+			Fps.push_back(Real::Infinity());
+			if (gm::fabs(D - A) > 1e-12)
 			{
 				Fps.push_back(B / (D - A));
 			}
 		}
 		else if (Disc >= -1e-12 * Scale)
 		{
-			const double Sq = std::sqrt(std::max(0.0, Disc));
+			const Real Sq = gm::sqrt(gm::max(0.0, Disc));
 			Fps.push_back((A - D + Sq) / (2 * Cc));
 			Fps.push_back((A - D - Sq) / (2 * Cc));
 		}
 	}
-	auto Mult = [&](double Z) {
-		if (std::isfinite(Z))
+	auto Mult = [&](Real Z) {
+		if (gm::isfinite(Z))
 		{
-			const double Den = Cc * Z + D;
+			const Real Den = Cc * Z + D;
 			return Det / (Den * Den);
 		}
-		return std::fabs(Cc) < 1e-12 ? D / A : CtlNan;
+		return gm::fabs(Cc) < 1e-12 ? D / A : Real::NaN();
 	};
-	double Att = CtlNan, AttMult = CtlNan;
+	Real Att = Real::NaN(), AttMult = Real::NaN();
 	if (Type == 2 && !Fps.empty())
 	{
 		Att = Fps[0];
@@ -512,10 +516,10 @@ Result MobClass(const Call& C)
 	}
 	else if (Type == 3)
 	{
-		double Best = CtlInf;
-		for (double Z : Fps)
+		Real Best = Real::Infinity();
+		for (Real Z : Fps)
 		{
-			const double Mz = std::fabs(Mult(Z));
+			const Real Mz = gm::fabs(Mult(Z));
 			if (Mz < Best - 1e-12)
 			{
 				Best = Mz;
@@ -528,41 +532,41 @@ Result MobClass(const Call& C)
 		}
 		else
 		{
-			Att = CtlNan;
+			Att = Real::NaN();
 		}
 	}
-	const double Rot = Type == 4 ? 2 * std::atan2(std::sqrt(-Disc), Tr) : 0.0;
-	const double Z1 = Fps.empty() ? CtlNan : Fps[0];
-	const double Z2 = Fps.size() > 1 ? Fps[1] : Z1;
-	return Result::Record({{"type", static_cast<double>(Type)}, {"tr", Tr}, {"det", Det}, {"disc", Disc}, {"z1", Z1}, {"z2", Z2}, {"att", Att}, {"m", AttMult}, {"rot", Rot}});
+	const Real Rot = Type == 4 ? 2 * gm::atan2(gm::sqrt(-Disc), Tr) : 0.0;
+	const Real Z1 = Fps.empty() ? Real::NaN() : Fps[0];
+	const Real Z2 = Fps.size() > 1 ? Fps[1] : Z1;
+	return Result::Record({{"type", Real(Type)}, {"tr", Tr}, {"det", Det}, {"disc", Disc}, {"z1", Z1}, {"z2", Z2}, {"att", Att}, {"m", AttMult}, {"rot", Rot}});
 }
 
 // Escape time of p' = alpha + 2 beta p + gamma p^2 from p0. With u = gamma p + beta the flow is
 // u' = u^2 + (alpha gamma - beta^2), so it escapes in finite time exactly when u passes through infinity.
 Result RiccEsc(const Call& C)
 {
-	const double Al = C.N(0), Be = C.N(1), Ga = C.N(2), P0 = C.N(3);
+	const Real Al = C.N(0), Be = C.N(1), Ga = C.N(2), P0 = C.N(3);
 	if (Ga == 0.0)
 	{
-		return Result::Of(CtlInf);
+		return Result::Of(Real::Infinity());
 	}
-	const double U0 = Ga * P0 + Be, Om2 = Al * Ga - Be * Be;
-	const double Tiny = 1e-14 * std::max(1.0, Al * Ga + Be * Be);
+	const Real U0 = Ga * P0 + Be, Om2 = Al * Ga - Be * Be;
+	const Real Tiny = 1e-14 * gm::max(1.0, Al * Ga + Be * Be);
 	if (Om2 > Tiny)
 	{
-		const double Om = std::sqrt(Om2);
-		return Result::Of((cst::Pi / 2 - std::atan(U0 / Om)) / Om);
+		const Real Om = gm::sqrt(Om2);
+		return Result::Of((cst::Pi() / 2 - gm::atan(U0 / Om)) / Om);
 	}
 	if (Om2 >= -Tiny)
 	{
-		return Result::Of(U0 > 0 ? 1.0 / U0 : CtlInf);
+		return Result::Of(U0 > 0 ? 1.0 / U0 : Real::Infinity());
 	}
-	const double Kk = std::sqrt(-Om2);
+	const Real Kk = gm::sqrt(-Om2);
 	if (U0 > Kk)
 	{
-		return Result::Of(std::log((U0 + Kk) / (U0 - Kk)) / (2 * Kk));
+		return Result::Of(gm::log((U0 + Kk) / (U0 - Kk)) / (2 * Kk));
 	}
-	return Result::Of(CtlInf);
+	return Result::Of(Real::Infinity());
 }
 
 // H = [A, Q; C'R^-1C, -A'] of the continuous filter Riccati equation (chapter 3, Theorem 2).
@@ -598,7 +602,7 @@ Result Hamilton(const Call& C)
 // the stabilizing P > 0 in this sign convention) or -1 (left half, an exact ARE solution with P < 0).
 Result HamAre(const Call& C)
 {
-	const double Side = C.N(4);
+	const Real Side = C.N(4);
 	if (Side != 1.0 && Side != -1.0)
 	{
 		return Result::Fail("side must be 1 (right half: stabilizing) or -1 (left half)");
@@ -616,7 +620,7 @@ Result HamAre(const Call& C)
 	{
 		for (int j = 0; j < N; ++j)
 		{
-			const double Dij = i == j ? Side : 0.0;
+			const Real Dij = i == j ? Side : 0.0;
 			Lhs(i, j) = S(i, j) - Dij;
 			Lhs(i + N, j) = S(i + N, j);
 			Rhs(i, j) = -S(i, j + N);
@@ -632,7 +636,7 @@ Result HamAre(const Call& C)
 	// Residual of A P + P A' + Q - P C'R^-1C P = 0, with the blocks of H.
 	const Matrix Ah = SubBlock(H, 0, 0, N, N), Qh = SubBlock(H, 0, N, N, N), Gh = SubBlock(H, N, 0, N, N);
 	const Matrix Res = la::Sub(la::Add(la::Add(la::Mul(Ah, P), la::Mul(P, la::Transpose(Ah))), Qh), la::Mul(la::Mul(P, Gh), P));
-	if (!(la::MaxAbs(Res) <= 1e-7 * std::max(1.0, std::max(la::MaxAbs(P), la::MaxAbs(Qh)))))
+	if (!(la::MaxAbs(Res) <= 1e-7 * gm::max(1.0, gm::max(la::MaxAbs(P), la::MaxAbs(Qh)))))
 	{
 		return Result::Fail("that half of the spectrum gives no solution (Y singular)");
 	}
@@ -667,13 +671,13 @@ Result SympZ(const Call& C)
 // ZEM scales like tgo^N, so the effort integral of a^2 is N^2 ZEM^2 / ((2N - 3) tgo^3) (N = 3: minimum effort).
 Result Pn(const Call& C)
 {
-	const double Y0 = C.N(0), V0 = C.N(1), Tgo = C.N(2), Nn = C.N(3);
+	const Real Y0 = C.N(0), V0 = C.N(1), Tgo = C.N(2), Nn = C.N(3);
 	if (!(Tgo > 0))
 	{
 		return Result::Fail("tgo must be > 0");
 	}
-	const double Zem = Y0 + V0 * Tgo;
-	const double Effort = Nn > 1.5 ? Nn * Nn * Zem * Zem / ((2 * Nn - 3) * Tgo * Tgo * Tgo) : CtlInf;
+	const Real Zem = Y0 + V0 * Tgo;
+	const Real Effort = Nn > 1.5 ? Nn * Nn * Zem * Zem / ((2 * Nn - 3) * Tgo * Tgo * Tgo) : Real::Infinity();
 	return Result::Record({{"zem", Zem}, {"a0", -Nn * Zem / (Tgo * Tgo)}, {"effort", Effort}});
 }
 
@@ -704,7 +708,7 @@ bool SolveCare(const Matrix& A, const Matrix& B, const Matrix& Q, const Matrix& 
 	const Matrix At = la::Transpose(A);
 	const Matrix PB = la::Mul(*P, B);
 	const Matrix Res = la::Add(la::Sub(la::Add(la::Mul(At, *P), la::Mul(*P, A)), la::Mul(PB, *K)), Q);
-	const double Scale = std::max(1.0, std::max(la::MaxAbs(*P), la::MaxAbs(Q)));
+	const Real Scale = gm::max(1.0, gm::max(la::MaxAbs(*P), la::MaxAbs(Q)));
 	if (!(la::MaxAbs(Res) <= 1e-7 * Scale) || !(MaxRealPart(la::Sub(A, la::Mul(B, *K))) < 0))
 	{
 		*Err = "no stabilizing solution (is (A, B) stabilizable and (A, Q) detectable?)";
@@ -805,7 +809,7 @@ Result LyapFn(const Call& C)
 Result C2d(const Call& C)
 {
 	const Matrix &A = C.M(0), &B = C.M(1);
-	const double Dt = C.N(2);
+	const Real Dt = C.N(2);
 	if (!A.IsSquare())
 	{
 		return Result::Fail("A must be square, got " + ShapeText(A));
@@ -844,7 +848,7 @@ Result C2d(const Call& C)
 Result C2dq(const Call& C)
 {
 	const Matrix &A = C.M(0), &W = C.M(1);
-	const double Dt = C.N(2);
+	const Real Dt = C.N(2);
 	if (!A.IsSquare() || W.Rows != A.Rows || W.Cols != A.Cols)
 	{
 		return Result::Fail("A and W must be the same square size, got " + ShapeText(A) + " and " + ShapeText(W));
@@ -890,7 +894,7 @@ Result MpcGain(const Call& C)
 	{
 		return Result::Fail("N must be a whole number 1..10000");
 	}
-	const int N = static_cast<int>(C.N(5));
+	const int N = C.N(5).ToInt();
 	Matrix P = Pf, K;
 	for (int k = 1; k < N; ++k)
 	{
@@ -927,10 +931,10 @@ Result ClCost(const Call& C)
 		return Result::Fail(E);
 	}
 	const Matrix F = la::Sub(A, la::Mul(B, K));
-	const double Rho = la::SpectralRadius(F);
+	const Real Rho = la::SpectralRadius(F);
 	if (!(Rho < 1))
 	{
-		return Result::Fail("closed loop A - BK is not stable (spectral radius " + std::to_string(Rho) + "): the cost is infinite");
+		return Result::Fail("closed loop A - BK is not stable (spectral radius " + Rho.ToString(6) + "): the cost is infinite");
 	}
 	Matrix X;
 	if (!la::Dlyap(la::Transpose(F), la::Add(Q, la::Mul(la::Mul(la::Transpose(K), R), K)), &X, &E))
@@ -947,14 +951,14 @@ Result Gm(const Call& C)
 	{
 		return Result::Fail("A n x n, B n x m, K m x n; got " + ShapeText(A) + ", " + ShapeText(B) + ", " + ShapeText(K));
 	}
-	const double Lo = C.N(3), Hi = C.N(4);
+	const Real Lo = C.N(3), Hi = C.N(4);
 	if (!(Lo > 0 && Lo < 1 && Hi > 1))
 	{
 		return Result::Fail("search range needs 0 < lo < 1 < hi");
 	}
 	const Matrix BK = la::Mul(B, K);
-	double OutLo = 0.0, OutHi = 0.0;
-	if (!GainInterval([&](double G) { return la::SpectralRadius(la::Sub(A, la::Scale(BK, G))); }, Lo, Hi, 400, &OutLo, &OutHi))
+	Real OutLo = 0.0, OutHi = 0.0;
+	if (!GainInterval([&](Real G) { return la::SpectralRadius(la::Sub(A, la::Scale(BK, G))); }, Lo, Hi, 400, &OutLo, &OutHi))
 	{
 		return Result::Fail("A - BK is not stable at g = 1");
 	}
@@ -979,25 +983,25 @@ Result LqrGm(const Call& C)
 	{
 		return Result::Fail(E);
 	}
-	const double Rv = R(0, 0);
-	const double Rho = std::sqrt(Rv / (Rv + la::Mul(la::Mul(la::Transpose(B), P), B).ScalarValue()));
+	const Real Rv = R(0, 0);
+	const Real Rho = gm::sqrt(Rv / (Rv + la::Mul(la::Mul(la::Transpose(B), P), B).ScalarValue()));
 	return Result::Record({{"rho", Rho}, {"lo", 1 / (1 + Rho)}, {"hi", 1 / (1 - Rho)}});
 }
 
 // min over the unit circle of |1 + K (zI - A)^-1 B| on the bench's 600-point grid.
-double ReturnDifferenceMin(const Matrix& A, const Matrix& B, const Matrix& K)
+Real ReturnDifferenceMin(const Matrix& A, const Matrix& B, const Matrix& K)
 {
 	const int N = A.Rows, Steps = 600;
-	double Best = CtlInf;
+	Real Best = Real::Infinity();
 	for (int i = 0; i < Steps; ++i)
 	{
-		const double W = 1e-4 + (cst::Pi - 1e-4) * i / (Steps - 1), Cw = std::cos(W), Sw = std::sin(W);
+		const Real W = 1e-4 + (cst::Pi() - 1e-4) * i / (Steps - 1), Cw = gm::cos(W), Sw = gm::sin(W);
 		Matrix Z(2 * N, 2 * N), Rhs(2 * N, 1);
 		for (int r = 0; r < N; ++r)
 		{
 			for (int k = 0; k < N; ++k)
 			{
-				const double Re = (r == k ? Cw : 0) - A(r, k), Im = r == k ? Sw : 0;
+				const Real Re = (r == k ? Cw : 0) - A(r, k), Im = r == k ? Sw : 0;
 				Z(r, k) = Re;
 				Z(r, k + N) = -Im;
 				Z(r + N, k) = Im;
@@ -1011,13 +1015,13 @@ double ReturnDifferenceMin(const Matrix& A, const Matrix& B, const Matrix& K)
 		{
 			return 0.0;
 		}
-		double Re = 1, Im = 0;
+		Real Re = 1, Im = 0;
 		for (int k = 0; k < N; ++k)
 		{
 			Re += K(0, k) * X(k, 0);
 			Im += K(0, k) * X(k + N, 0);
 		}
-		Best = std::min(Best, std::hypot(Re, Im));
+		Best = gm::min(Best, gm::hypot(Re, Im));
 	}
 	return Best;
 }
@@ -1046,20 +1050,20 @@ Result LqgCl(const Call& C)
 // Doyle (1978): x' = [1 1; 0 1]x + [0 1]'u + [1 1]'w, y = x1 + v. K = f[1 1], L = d[1 1]'.
 Result Doyle(const Call& C)
 {
-	const double Q = C.N(0);
-	const double Sigma = std::isnan(C.N(1)) ? Q : C.N(1);
+	const Real Q = C.N(0);
+	const Real Sigma = gm::isnan(C.N(1)) ? Q : C.N(1);
 	if (!(Q >= 0) || !(Sigma >= 0))
 	{
 		return Result::Fail("q and sigma must be >= 0");
 	}
-	const double F = 2 + std::sqrt(4 + Q), D = 2 + std::sqrt(4 + Sigma);
+	const Real F = 2 + gm::sqrt(4 + Q), D = 2 + gm::sqrt(4 + Sigma);
 	const Matrix A = Matrix::FromRows({{1, 1}, {0, 1}});
 	const Matrix BK = Matrix::FromRows({{0, 0}, {F, F}});
 	const Matrix LC = Matrix::FromRows({{D, 0}, {D, 0}});
 	const Matrix Est = la::Sub(la::Sub(A, BK), LC);
-	auto LqgFn = [&](double G) { return std::exp(MaxRealPart(Block(A, la::Scale(BK, -G), LC, Est))); };
-	auto LqrFn = [&](double G) { return std::exp(MaxRealPart(la::Sub(A, la::Scale(BK, G)))); };
-	double Lo = CtlNan, Hi = CtlNan, RLo = CtlNan, RHi = CtlNan;
+	auto LqgFn = [&](Real G) { return gm::exp(MaxRealPart(Block(A, la::Scale(BK, -G), LC, Est))); };
+	auto LqrFn = [&](Real G) { return gm::exp(MaxRealPart(la::Sub(A, la::Scale(BK, G)))); };
+	Real Lo = Real::NaN(), Hi = Real::NaN(), RLo = Real::NaN(), RHi = Real::NaN();
 	GainInterval(LqgFn, 1e-2, 1e2, 400, &Lo, &Hi);
 	GainInterval(LqrFn, 1e-2, 1e3, 400, &RLo, &RHi);
 	return Result::Record({{"f", F}, {"d", D}, {"lo", Lo}, {"hi", Hi}, {"rlo", RLo}, {"rhi", RHi}});
@@ -1070,13 +1074,13 @@ Result Doyle(const Call& C)
 struct GlideDesign
 {
 	Matrix Ad, Bd, Qd, Cm, R, Q, P, K, Pf, M;
-	double Ru = 0.0, Dt = 0.1;
+	Real Ru = 0.0, Dt = 0.1;
 };
 
-bool DesignGlide(double Sg, double Tau, double Sd, double Sv, GlideDesign* D, std::string* Err)
+bool DesignGlide(Real Sg, Real Tau, Real Sd, Real Sv, GlideDesign* D, std::string* Err)
 {
-	const double Za = 70.5, Wn = 4.37, Zeta = 0.6;
-	const double Su = 0.003, Qd = 1, Qv = 1 / (1.5 * 1.5), Rdeg = 2 * cst::Pi / 180;
+	const Real Za = 70.5, Wn = 4.37, Zeta = 0.6;
+	const Real Su = 0.003, Qd = 1, Qv = Real(1) / (Real(1.5) * Real(1.5)), Rdeg = 2 * cst::Pi() / 180;
 	const int N = 5;
 	Matrix A(N, N), B(N, 1), W(N, N);
 	A(0, 1) = 1;
@@ -1087,7 +1091,7 @@ bool DesignGlide(double Sg, double Tau, double Sd, double Sv, GlideDesign* D, st
 	A(3, 3) = -2 * Zeta * Wn;
 	A(4, 4) = -1 / Tau;
 	B(3, 0) = Wn * Wn;
-	W(3, 3) = std::pow(Wn, 4) * (Su * Su);
+	W(3, 3) = gm::powi(Wn, 4) * (Su * Su);
 	W(4, 4) = 2 * (Sg * Sg) / Tau;
 	D->Dt = 0.1;
 	Matrix Aug(N + 1, N + 1);
@@ -1125,7 +1129,7 @@ bool DesignGlide(double Sg, double Tau, double Sd, double Sv, GlideDesign* D, st
 	D->Cm = Matrix::FromRows({{1, 0, 0, 0, 0}, {0, 1, 0, 0, 1}});
 	D->R = Matrix::FromRows({{Sd * Sd, 0}, {0, Sv * Sv}});
 	D->Q = Matrix(N, N);
-	const double Hv[5] = {0, 1, 0, 0, 1};
+	const Real Hv[5] = {0, 1, 0, 0, 1};
 	D->Q(0, 0) = Qd;
 	for (int i = 0; i < N; ++i)
 	{
@@ -1142,11 +1146,16 @@ bool DesignGlide(double Sg, double Tau, double Sd, double Sv, GlideDesign* D, st
 	return SteadyKalman(D->Ad, D->Cm, D->Qd, D->R, &D->Pf, &D->M, Err);
 }
 
-const double GlidePid[3] = {0.006, 0.020, 0.0006};
-
-Matrix GlidePidLoop(const GlideDesign& D, double G)
+// The bench's hand-tuned PID gains: rad/m, rad/(m/s), rad/(m s).
+const Real* GlidePid()
 {
-	const double Kp = GlidePid[0], Kd = GlidePid[1], Ki = GlidePid[2];
+	static const Real Gains[3] = {Real(0.006), Real(0.020), Real(0.0006)};
+	return Gains;
+}
+
+Matrix GlidePidLoop(const GlideDesign& D, Real G)
+{
+	const Real Kp = GlidePid()[0], Kd = GlidePid()[1], Ki = GlidePid()[2];
 	const Matrix BKC = la::Mul(la::Mul(D.Bd, Matrix::FromRows({{Kp, Kd}})), D.Cm);
 	Matrix F(6, 6);
 	for (int i = 0; i < 5; ++i)
@@ -1168,7 +1177,7 @@ Matrix GlidePidLoop(const GlideDesign& D, double G)
 // Stationary covariance of one closed loop (approach closedCov) and the gain interval of that loop.
 Result Glide(const Call& C)
 {
-	const double Mode = C.N(0);
+	const Real Mode = C.N(0);
 	if (Mode != 1 && Mode != 2 && Mode != 3)
 	{
 		return Result::Fail("mode: 1 LQR on the true state, 2 LQG, 3 PID");
@@ -1200,7 +1209,7 @@ Result Glide(const Call& C)
 	else
 	{
 		F = GlidePidLoop(D, 1.0);
-		const Matrix BK = la::Mul(D.Bd, Matrix::FromRows({{GlidePid[0], GlidePid[1]}}));
+		const Matrix BK = la::Mul(D.Bd, Matrix::FromRows({{GlidePid()[0], GlidePid()[1]}}));
 		Gw = Block(I5, Matrix(5, 0), Matrix(1, 5), Matrix(1, 0));
 		Gv = Block(la::Scale(BK, -1.0), Matrix(5, 0), Matrix::FromRows({{D.Dt, 0}}), Matrix(1, 0));
 	}
@@ -1208,10 +1217,10 @@ Result Glide(const Call& C)
 	{
 		Wn = la::Add(la::Mul(la::Mul(Gw, D.Qd), la::Transpose(Gw)), la::Mul(la::Mul(Gv, D.R), la::Transpose(Gv)));
 	}
-	const double Rho = la::SpectralRadius(F);
+	const Real Rho = la::SpectralRadius(F);
 	if (!(Rho < 1))
 	{
-		return Result::Fail("closed loop unstable (spectral radius " + std::to_string(Rho) + ")");
+		return Result::Fail("closed loop unstable (spectral radius " + Rho.ToString(6) + ")");
 	}
 	Matrix S;
 	if (!la::Dlyap(F, Wn, &S, &E))
@@ -1219,7 +1228,7 @@ Result Glide(const Call& C)
 		return Result::Fail(E);
 	}
 	const Matrix Sx = SubBlock(S, 0, 0, 5, 5);
-	double Su = 0.0;
+	Real Su = 0.0;
 	if (Mode == 1)
 	{
 		Su = la::Mul(la::Mul(D.K, S), la::Transpose(D.K)).ScalarValue();
@@ -1236,12 +1245,12 @@ Result Glide(const Call& C)
 		Matrix Gx(1, 6);
 		for (int j = 0; j < 5; ++j)
 		{
-			Gx(0, j) = -(GlidePid[0] * D.Cm(0, j) + GlidePid[1] * D.Cm(1, j));
+			Gx(0, j) = -(GlidePid()[0] * D.Cm(0, j) + GlidePid()[1] * D.Cm(1, j));
 		}
-		Gx(0, 5) = -GlidePid[2];
-		Su = la::Mul(la::Mul(Gx, S), la::Transpose(Gx)).ScalarValue() + (GlidePid[0] * GlidePid[0] * D.R(0, 0) + GlidePid[1] * GlidePid[1] * D.R(1, 1));
+		Gx(0, 5) = -GlidePid()[2];
+		Su = la::Mul(la::Mul(Gx, S), la::Transpose(Gx)).ScalarValue() + (GlidePid()[0] * GlidePid()[0] * D.R(0, 0) + GlidePid()[1] * GlidePid()[1] * D.R(1, 1));
 	}
-	double J = D.Ru * Su;
+	Real J = D.Ru * Su;
 	for (int i = 0; i < 5; ++i)
 	{
 		for (int j = 0; j < 5; ++j)
@@ -1249,39 +1258,42 @@ Result Glide(const Call& C)
 			J += D.Q(i, j) * Sx(j, i);
 		}
 	}
-	double Lo = CtlNan, Hi = CtlNan;
+	Real Lo = Real::NaN(), Hi = Real::NaN();
 	if (Mode == 1)
 	{
 		const Matrix BK = la::Mul(D.Bd, D.K);
-		GainInterval([&](double G) { return la::SpectralRadius(la::Sub(D.Ad, la::Scale(BK, G))); }, 1e-3, 1e3, 400, &Lo, &Hi);
+		GainInterval([&](Real G) { return la::SpectralRadius(la::Sub(D.Ad, la::Scale(BK, G))); }, 1e-3, 1e3, 400, &Lo, &Hi);
 	}
 	else if (Mode == 2)
 	{
-		GainInterval([&](double G) { return la::SpectralRadius(LqgLoop(D.Ad, D.Bd, D.Cm, D.K, D.M, G)); }, 1e-3, 1e3, 400, &Lo, &Hi);
+		Matrix Base, Dir;
+		LqgParts(D.Ad, D.Bd, D.Cm, D.K, D.M, &Base, &Dir);
+		GainInterval([&](Real G) { return la::SpectralRadius(la::Sub(Base, la::Scale(Dir, G))); }, 1e-3, 1e3, 400, &Lo, &Hi);
 	}
 	else
 	{
-		GainInterval([&](double G) { return la::SpectralRadius(GlidePidLoop(D, G)); }, 1e-3, 1e3, 400, &Lo, &Hi);
+		const Matrix Base = GlidePidLoop(D, 0), Dir = la::Sub(Base, GlidePidLoop(D, 1));
+		GainInterval([&](Real G) { return la::SpectralRadius(la::Sub(Base, la::Scale(Dir, G))); }, 1e-3, 1e3, 400, &Lo, &Hi);
 	}
-	const double Rq = std::sqrt(D.Ru / (D.Ru + la::Mul(la::Mul(la::Transpose(D.Bd), D.P), D.Bd).ScalarValue()));
-	const double Rd = ReturnDifferenceMin(D.Ad, D.Bd, D.K);
-	return Result::Record({{"sd", std::sqrt(S(0, 0))}, {"J", J}, {"su", std::sqrt(Su)}, {"rho", Rho}, {"lo", Lo}, {"hi", Hi}, {"rd", Rd}, {"rq", Rq}, {"glo", 1 / (1 + Rq)}, {"ghi", 1 / (1 - Rq)}});
+	const Real Rq = gm::sqrt(D.Ru / (D.Ru + la::Mul(la::Mul(la::Transpose(D.Bd), D.P), D.Bd).ScalarValue()));
+	const Real Rd = ReturnDifferenceMin(D.Ad, D.Bd, D.K);
+	return Result::Record({{"sd", gm::sqrt(S(0, 0))}, {"J", J}, {"su", gm::sqrt(Su)}, {"rho", Rho}, {"lo", Lo}, {"hi", Hi}, {"rd", Rd}, {"rq", Rq}, {"glo", 1 / (1 + Rq)}, {"ghi", 1 / (1 - Rq)}});
 }
 
-/* ---------- control: the MPC bench (mpc/mpc.js), double integrator with a dual active-set QP ---------- */
+/* ---------- control: the MPC bench (mpc/mpc.js), Real integrator with a dual active-set QP ---------- */
 
-using Vec = std::vector<double>;
+using Vec = std::vector<Real>;
 using Rows = std::vector<Vec>;
 
 struct MpcPlant
 {
-	double H = 0.2;
-	double A[2][2] = {{1, 0.2}, {0, 1}};
-	double B[2] = {0.02, 0.2};
-	double Q[2][2] = {{1, 0}, {0, 0}};
+	Real H = 0.2;
+	Real A[2][2] = {{1, 0.2}, {0, 1}};
+	Real B[2] = {0.02, 0.2};
+	Real Q[2][2] = {{1, 0}, {0, 0}};
 };
 
-MpcPlant MakeMpcPlant(double H)
+MpcPlant MakeMpcPlant(Real H)
 {
 	MpcPlant Pl;
 	Pl.H = H;
@@ -1291,26 +1303,26 @@ MpcPlant MakeMpcPlant(double H)
 	return Pl;
 }
 
-void MpcStep(const MpcPlant& Pl, double* X, double U)
+void MpcStep(const MpcPlant& Pl, Real* X, Real U)
 {
-	const double X0 = X[0] + Pl.H * X[1] + Pl.B[0] * U, X1 = X[1] + Pl.B[1] * U;
+	const Real X0 = X[0] + Pl.H * X[1] + Pl.B[0] * U, X1 = X[1] + Pl.B[1] * U;
 	X[0] = X0;
 	X[1] = X1;
 }
 
-double MpcStage(const MpcPlant& Pl, const double* X, double U, double R)
+Real MpcStage(const MpcPlant& Pl, const Real* X, Real U, Real R)
 {
 	return X[0] * (Pl.Q[0][0] * X[0] + Pl.Q[0][1] * X[1]) + X[1] * (Pl.Q[1][0] * X[0] + Pl.Q[1][1] * X[1]) + R * U * U;
 }
 
-double MpcQuad(const double P[2][2], const double* X)
+Real MpcQuad(const Real P[2][2], const Real* X)
 {
 	return P[0][0] * X[0] * X[0] + 2 * P[0][1] * X[0] * X[1] + P[1][1] * X[1] * X[1];
 }
 
-double VDot(const Vec& A, const Vec& B)
+Real VDot(const Vec& A, const Vec& B)
 {
-	double S = 0;
+	Real S = 0;
 	for (size_t i = 0; i < A.size(); ++i)
 	{
 		S += A[i] * B[i];
@@ -1319,19 +1331,19 @@ double VDot(const Vec& A, const Vec& B)
 }
 
 // DARE for the plant by Riccati iteration (mpc.js dare()).
-void MpcDare(const MpcPlant& Pl, double R, double P[2][2], double K[2])
+void MpcDare(const MpcPlant& Pl, Real R, Real P[2][2], Real K[2])
 {
-	const double Tol = 1e-14;
-	double Pc[2][2] = {{Pl.Q[0][0], Pl.Q[0][1]}, {Pl.Q[1][0], Pl.Q[1][1]}};
-	auto Map = [&](const double In[2][2], double Out[2][2]) {
-		const double PB[2] = {In[0][0] * Pl.B[0] + In[0][1] * Pl.B[1], In[1][0] * Pl.B[0] + In[1][1] * Pl.B[1]};
-		const double S = R + Pl.B[0] * PB[0] + Pl.B[1] * PB[1];
-		const double APB[2] = {Pl.A[0][0] * PB[0] + Pl.A[1][0] * PB[1], Pl.A[0][1] * PB[0] + Pl.A[1][1] * PB[1]};
+	const Real Tol = 1e-14;
+	Real Pc[2][2] = {{Pl.Q[0][0], Pl.Q[0][1]}, {Pl.Q[1][0], Pl.Q[1][1]}};
+	auto Map = [&](const Real In[2][2], Real Out[2][2]) {
+		const Real PB[2] = {In[0][0] * Pl.B[0] + In[0][1] * Pl.B[1], In[1][0] * Pl.B[0] + In[1][1] * Pl.B[1]};
+		const Real S = R + Pl.B[0] * PB[0] + Pl.B[1] * PB[1];
+		const Real APB[2] = {Pl.A[0][0] * PB[0] + Pl.A[1][0] * PB[1], Pl.A[0][1] * PB[0] + Pl.A[1][1] * PB[1]};
 		for (int i = 0; i < 2; ++i)
 		{
 			for (int j = 0; j < 2; ++j)
 			{
-				double Acc = 0;
+				Real Acc = 0;
 				for (int k = 0; k < 2; ++k)
 				{
 					for (int l = 0; l < 2; ++l)
@@ -1345,15 +1357,15 @@ void MpcDare(const MpcPlant& Pl, double R, double P[2][2], double K[2])
 	};
 	for (int It = 0; It < 100000; ++It)
 	{
-		double Nx[2][2];
+		Real Nx[2][2];
 		Map(Pc, Nx);
-		double Dmax = 0, Sc = 0;
+		Real Dmax = 0, Sc = 0;
 		for (int i = 0; i < 2; ++i)
 		{
 			for (int j = 0; j < 2; ++j)
 			{
-				Dmax = std::max(Dmax, std::fabs(Nx[i][j] - Pc[i][j]));
-				Sc = std::max(Sc, std::fabs(Nx[i][j]));
+				Dmax = gm::max(Dmax, gm::fabs(Nx[i][j] - Pc[i][j]));
+				Sc = gm::max(Sc, gm::fabs(Nx[i][j]));
 			}
 		}
 		for (int i = 0; i < 2; ++i)
@@ -1368,8 +1380,8 @@ void MpcDare(const MpcPlant& Pl, double R, double P[2][2], double K[2])
 			break;
 		}
 	}
-	const double PB[2] = {Pc[0][0] * Pl.B[0] + Pc[0][1] * Pl.B[1], Pc[1][0] * Pl.B[0] + Pc[1][1] * Pl.B[1]};
-	const double S = R + Pl.B[0] * PB[0] + Pl.B[1] * PB[1];
+	const Real PB[2] = {Pc[0][0] * Pl.B[0] + Pc[0][1] * Pl.B[1], Pc[1][0] * Pl.B[0] + Pc[1][1] * Pl.B[1]};
+	const Real S = R + Pl.B[0] * PB[0] + Pl.B[1] * PB[1];
 	K[0] = (PB[0] * Pl.A[0][0] + PB[1] * Pl.A[1][0]) / S;
 	K[1] = (PB[0] * Pl.A[0][1] + PB[1] * Pl.A[1][1]) / S;
 	for (int i = 0; i < 2; ++i)
@@ -1389,7 +1401,7 @@ bool MpcChol(const Rows& M, Rows* L)
 	{
 		for (size_t j = 0; j <= i; ++j)
 		{
-			double S = M[i][j];
+			Real S = M[i][j];
 			for (size_t k = 0; k < j; ++k)
 			{
 				S -= (*L)[i][k] * (*L)[j][k];
@@ -1400,7 +1412,7 @@ bool MpcChol(const Rows& M, Rows* L)
 				{
 					return false;
 				}
-				(*L)[i][i] = std::sqrt(S);
+				(*L)[i][i] = gm::sqrt(S);
 			}
 			else
 			{
@@ -1417,7 +1429,7 @@ Vec MpcCholSolve(const Rows& L, const Vec& B)
 	Vec Y(N, 0.0), X(N, 0.0);
 	for (size_t i = 0; i < N; ++i)
 	{
-		double S = B[i];
+		Real S = B[i];
 		for (size_t k = 0; k < i; ++k)
 		{
 			S -= L[i][k] * Y[k];
@@ -1426,7 +1438,7 @@ Vec MpcCholSolve(const Rows& L, const Vec& B)
 	}
 	for (size_t ii = N; ii-- > 0;)
 	{
-		double S = Y[ii];
+		Real S = Y[ii];
 		for (size_t k = ii + 1; k < N; ++k)
 		{
 			S -= L[k][ii] * X[k];
@@ -1448,17 +1460,17 @@ struct MpcProblem
 {
 	MpcPlant Pl;
 	int N = 0;
-	double R = 0, Lo = 0, Hi = 0, Pmin = 0;
+	Real R = 0, Lo = 0, Hi = 0, Pmin = 0;
 	bool HasPmin = false;
 	int Terminal = MpcTermNone;
 	Rows Phi, Gam, M, Minv, F, Nc, W, G, GF;
-	double E[2][2] = {{0, 0}, {0, 0}};
+	Real E[2][2] = {{0, 0}, {0, 0}};
 	std::vector<char> Eq, HasO;
 	Vec BaseV, BaseO0, BaseO1, UnitS;
 	std::vector<int> UnitK;
 };
 
-bool MpcBuild(const MpcPlant& Pl, int N, double R, const double Pf[2][2], double Lo, double Hi, bool HasPmin, double Pmin, int Terminal, MpcProblem* Pr)
+bool MpcBuild(const MpcPlant& Pl, int N, Real R, const Real Pf[2][2], Real Lo, Real Hi, bool HasPmin, Real Pmin, int Terminal, MpcProblem* Pr)
 {
 	Pr->Pl = Pl;
 	Pr->N = N;
@@ -1475,23 +1487,23 @@ bool MpcBuild(const MpcPlant& Pl, int N, double R, const double Pf[2][2], double
 	Rows& Gam = Pr->Gam;
 	Phi = Rows(2 * N, Vec(2, 0.0));
 	Gam = Rows(2 * N, Vec(N, 0.0));
-	std::vector<std::array<double, 4>> Pw;
+	std::vector<std::array<Real, 4>> Pw;
 	Pw.push_back({1, 0, 0, 1});
 	for (int k = 1; k <= N; ++k)
 	{
-		const std::array<double, 4> a = Pw[k - 1];
+		const std::array<Real, 4> a = Pw[k - 1];
 		Pw.push_back({A[0][0] * a[0] + A[0][1] * a[2], A[0][0] * a[1] + A[0][1] * a[3], A[1][0] * a[0] + A[1][1] * a[2], A[1][0] * a[1] + A[1][1] * a[3]});
 	}
 	for (int k = 0; k < N; ++k)
 	{
-		const std::array<double, 4>& Ak = Pw[k + 1];
+		const std::array<Real, 4>& Ak = Pw[k + 1];
 		Phi[2 * k][0] = Ak[0];
 		Phi[2 * k][1] = Ak[1];
 		Phi[2 * k + 1][0] = Ak[2];
 		Phi[2 * k + 1][1] = Ak[3];
 		for (int j = 0; j <= k; ++j)
 		{
-			const std::array<double, 4>& p = Pw[k - j];
+			const std::array<Real, 4>& p = Pw[k - j];
 			Gam[2 * k][j] = p[0] * B[0] + p[1] * B[1];
 			Gam[2 * k + 1][j] = p[2] * B[0] + p[3] * B[1];
 		}
@@ -1524,7 +1536,7 @@ bool MpcBuild(const MpcPlant& Pl, int N, double R, const double Pf[2][2], double
 	{
 		for (int j = 0; j < N; ++j)
 		{
-			double S = 0;
+			Real S = 0;
 			for (int k = 0; k < 2 * N; ++k)
 			{
 				S += Gam[k][i] * QG[k][j];
@@ -1533,7 +1545,7 @@ bool MpcBuild(const MpcPlant& Pl, int N, double R, const double Pf[2][2], double
 		}
 		for (int j = 0; j < 2; ++j)
 		{
-			double S = 0;
+			Real S = 0;
 			for (int k = 0; k < 2 * N; ++k)
 			{
 				S += Gam[k][i] * QP[k][j];
@@ -1545,7 +1557,7 @@ bool MpcBuild(const MpcPlant& Pl, int N, double R, const double Pf[2][2], double
 	{
 		for (int j = 0; j < 2; ++j)
 		{
-			double S = 0;
+			Real S = 0;
 			for (int k = 0; k < 2 * N; ++k)
 			{
 				S += Phi[k][i] * QP[k][j];
@@ -1553,7 +1565,7 @@ bool MpcBuild(const MpcPlant& Pl, int N, double R, const double Pf[2][2], double
 			Pr->E[i][j] += S;
 		}
 	}
-	auto AddRow = [&](const Vec& Row, bool IsEq, double V, bool WithO, double O0, double O1) {
+	auto AddRow = [&](const Vec& Row, bool IsEq, Real V, bool WithO, Real O0, Real O1) {
 		Pr->Nc.push_back(Row);
 		Pr->Eq.push_back(IsEq ? 1 : 0);
 		Pr->BaseV.push_back(V);
@@ -1606,7 +1618,7 @@ bool MpcBuild(const MpcPlant& Pl, int N, double R, const double Pf[2][2], double
 				K = j;
 			}
 		}
-		if (Single && K >= 0 && std::fabs(Pr->Nc[i][K]) == 1)
+		if (Single && K >= 0 && gm::fabs(Pr->Nc[i][K]) == 1)
 		{
 			Pr->UnitK[i] = K;
 			Pr->UnitS[i] = Pr->Nc[i][K];
@@ -1651,7 +1663,7 @@ bool MpcBuild(const MpcPlant& Pl, int N, double R, const double Pf[2][2], double
 	{
 		for (size_t j = 0; j <= i; ++j)
 		{
-			const double Gij = Pr->UnitK[i] >= 0 ? Pr->UnitS[i] * Pr->W[j][Pr->UnitK[i]] : VDot(Pr->Nc[i], Pr->W[j]);
+			const Real Gij = Pr->UnitK[i] >= 0 ? Pr->UnitS[i] * Pr->W[j][Pr->UnitK[i]] : VDot(Pr->Nc[i], Pr->W[j]);
 			Pr->G[i][j] = Gij;
 			Pr->G[j][i] = Gij;
 		}
@@ -1662,10 +1674,10 @@ bool MpcBuild(const MpcPlant& Pl, int N, double R, const double Pf[2][2], double
 struct MpcQp
 {
 	Vec C, B;
-	double C0 = 0;
+	Real C0 = 0;
 };
 
-MpcQp MpcAt(const MpcProblem& Pr, const double* X0)
+MpcQp MpcAt(const MpcProblem& Pr, const Real* X0)
 {
 	MpcQp Q;
 	Q.C.resize(Pr.F.size());
@@ -1682,7 +1694,7 @@ MpcQp MpcAt(const MpcProblem& Pr, const double* X0)
 	return Q;
 }
 
-double MpcCost(const MpcProblem& Pr, const MpcQp& Q, const Vec& U)
+Real MpcCost(const MpcProblem& Pr, const MpcQp& Q, const Vec& U)
 {
 	Vec MU(U.size());
 	for (size_t i = 0; i < U.size(); ++i)
@@ -1713,7 +1725,7 @@ MpcSolution MpcGi(const MpcProblem& Pr, const MpcQp& Qp)
 	Vec X(N, 0.0);
 	for (int i = 0; i < N; ++i)
 	{
-		double S = 0;
+		Real S = 0;
 		for (int j = 0; j < N; ++j)
 		{
 			S -= Minv[i][j] * Cv[j];
@@ -1728,11 +1740,11 @@ MpcSolution MpcGi(const MpcProblem& Pr, const MpcQp& Qp)
 	Vec TolV(M);
 	for (int i = 0; i < M; ++i)
 	{
-		TolV[i] = 1e-9 * (1 + std::fabs(Bv[i]));
+		TolV[i] = 1e-9 * (1 + gm::fabs(Bv[i]));
 	}
-	auto At = [&](int i, int j) -> double& { return Gi[static_cast<size_t>(i) * Cap + j]; };
+	auto At = [&](int i, int j) -> Real& { return Gi[static_cast<size_t>(i) * Cap + j]; };
 	auto Drop = [&](int Kd) {
-		const double Piv = At(Kd, Kd);
+		const Real Piv = At(Kd, Kd);
 		for (int i = 0; i < Qa; ++i)
 		{
 			Col[i] = At(i, Kd);
@@ -1777,7 +1789,7 @@ MpcSolution MpcGi(const MpcProblem& Pr, const MpcQp& Qp)
 	for (int Outer = 0; Outer < 100 * (M + 1); ++Outer)
 	{
 		int P = -1;
-		double Worst = 0;
+		Real Worst = 0;
 		for (int i = 0; i < M; ++i)
 		{
 			if (IsAct[i])
@@ -1789,10 +1801,10 @@ MpcSolution MpcGi(const MpcProblem& Pr, const MpcQp& Qp)
 				P = i;
 				break;
 			}
-			const double S = Slack(i);
-			if (S < -TolV[i] && S / (1 + std::fabs(Bv[i])) < Worst)
+			const Real S = Slack(i);
+			if (S < -TolV[i] && S / (1 + gm::fabs(Bv[i])) < Worst)
 			{
-				Worst = S / (1 + std::fabs(Bv[i]));
+				Worst = S / (1 + gm::fabs(Bv[i]));
 				P = i;
 			}
 		}
@@ -1823,7 +1835,7 @@ MpcSolution MpcGi(const MpcProblem& Pr, const MpcQp& Qp)
 			{
 				return Out;
 			}
-			const double Sp = Sg[P] * Slack(P);
+			const Real Sp = Sg[P] * Slack(P);
 			const Vec& Wp = W[P];
 			const Vec& Gp = G[P];
 			for (int j = 0; j < Qa; ++j)
@@ -1832,7 +1844,7 @@ MpcSolution MpcGi(const MpcProblem& Pr, const MpcQp& Qp)
 			}
 			for (int i = 0; i < Qa; ++i)
 			{
-				double S = 0;
+				Real S = 0;
 				for (int j = 0; j < Qa; ++j)
 				{
 					S += At(i, j) * Gg[j];
@@ -1846,13 +1858,13 @@ MpcSolution MpcGi(const MpcProblem& Pr, const MpcQp& Qp)
 			for (int j = 0; j < Qa; ++j)
 			{
 				const Vec& Wj = W[Act[j]];
-				const double F = Sg[Act[j]] * Rr[j];
+				const Real F = Sg[Act[j]] * Rr[j];
 				for (int k = 0; k < N; ++k)
 				{
 					Z[k] -= Wj[k] * F;
 				}
 			}
-			double T1 = CtlInf;
+			Real T1 = Real::Infinity();
 			int Kd = -1;
 			for (int j = 0; j < Qa; ++j)
 			{
@@ -1862,7 +1874,7 @@ MpcSolution MpcGi(const MpcProblem& Pr, const MpcQp& Qp)
 					Kd = j;
 				}
 			}
-			double Zn = Gp[P];
+			Real Zn = Gp[P];
 			for (int j = 0; j < Qa; ++j)
 			{
 				Zn -= Gg[j] * Rr[j];
@@ -1878,12 +1890,12 @@ MpcSolution MpcGi(const MpcProblem& Pr, const MpcQp& Qp)
 					Up[j] -= T1 * Rr[j];
 				}
 				Up[Qa] += T1;
-				const double Last = Up[Qa];
+				const Real Last = Up[Qa];
 				Drop(Kd);
 				Up[Qa] = Last;
 				continue;
 			}
-			const double T2 = -Sp / Zn, T = std::min(T1, T2);
+			const Real T2 = -Sp / Zn, T = gm::min(T1, T2);
 			for (int k = 0; k < N; ++k)
 			{
 				X[k] += T * Z[k];
@@ -1914,7 +1926,7 @@ MpcSolution MpcGi(const MpcProblem& Pr, const MpcQp& Qp)
 				}
 				break;
 			}
-			const double Last = Up[Qa];
+			const Real Last = Up[Qa];
 			Drop(Kd);
 			Up[Qa] = Last;
 		}
@@ -1925,15 +1937,15 @@ MpcSolution MpcGi(const MpcProblem& Pr, const MpcQp& Qp)
 struct MpcRun
 {
 	int Fail = -1;      // step at which the QP had no solution, or -1
-	double J = CtlNan;  // closed-loop cost (NaN after a failure)
-	double MinPos = CtlInf;
-	double V0 = CtlNan; // open-loop value of the first plan
-	double X[2] = {0, 0};
+	Real J = Real::NaN();  // closed-loop cost (NaN after a failure)
+	Real MinPos = Real::Infinity();
+	Real V0 = Real::NaN(); // open-loop value of the first plan
+	Real X[2] = {0, 0};
 };
 
 // The linear law once no row is active: if the whole plan stays inside the box along its own rollout,
 // the remaining cost is that rollout's sum (mpc.js linearTail()).
-bool MpcLinearTail(MpcProblem& Pr, const double* X0, int Room, MpcRun* Run, double* Jtail)
+bool MpcLinearTail(MpcProblem& Pr, const Real* X0, int Room, MpcRun* Run, Real* Jtail)
 {
 	const int N = Pr.N;
 	if (Pr.GF.empty())
@@ -1943,7 +1955,7 @@ bool MpcLinearTail(MpcProblem& Pr, const double* X0, int Room, MpcRun* Run, doub
 		{
 			for (int j = 0; j < 2; ++j)
 			{
-				double S = 0;
+				Real S = 0;
 				for (int k = 0; k < N; ++k)
 				{
 					S += Pr.Minv[i][k] * Pr.F[k][j];
@@ -1952,28 +1964,28 @@ bool MpcLinearTail(MpcProblem& Pr, const double* X0, int Room, MpcRun* Run, doub
 			}
 		}
 	}
-	double X[2] = {X0[0], X0[1]};
-	double J = 0, MinPos = CtlInf;
+	Real X[2] = {X0[0], X0[1]};
+	Real J = 0, MinPos = Real::Infinity();
 	for (int k = 0; k < 5000; ++k)
 	{
 		for (int i = 0; i < N; ++i)
 		{
-			const double Ui = -(Pr.GF[i][0] * X[0] + Pr.GF[i][1] * X[1]);
+			const Real Ui = -(Pr.GF[i][0] * X[0] + Pr.GF[i][1] * X[1]);
 			if (Ui > Pr.Hi + 1e-12 || Ui < Pr.Lo - 1e-12)
 			{
 				return false;
 			}
 		}
-		const double U = -(Pr.GF[0][0] * X[0] + Pr.GF[0][1] * X[1]);
+		const Real U = -(Pr.GF[0][0] * X[0] + Pr.GF[0][1] * X[1]);
 		J += MpcStage(Pr.Pl, X, U, Pr.R);
 		MpcStep(Pr.Pl, X, U);
 		if (k < Room)
 		{
-			MinPos = std::min(MinPos, X[0]);
+			MinPos = gm::min(MinPos, X[0]);
 		}
-		if (std::max(std::fabs(X[0]), std::fabs(X[1])) < 1e-13 * (1 + std::fabs(X0[0]) + std::fabs(X0[1])))
+		if (gm::max(gm::fabs(X[0]), gm::fabs(X[1])) < 1e-13 * (1 + gm::fabs(X0[0]) + gm::fabs(X0[1])))
 		{
-			Run->MinPos = std::min(Run->MinPos, MinPos);
+			Run->MinPos = gm::min(Run->MinPos, MinPos);
 			*Jtail = J;
 			return true;
 		}
@@ -1982,11 +1994,11 @@ bool MpcLinearTail(MpcProblem& Pr, const double* X0, int Room, MpcRun* Run, doub
 }
 
 // Receding-horizon closed loop (mpc.js closedLoop()), T steps, cost closed with x'Px.
-MpcRun MpcClosedLoop(MpcProblem& Pr, const double* X0, const double P[2][2], int T, bool Tail)
+MpcRun MpcClosedLoop(MpcProblem& Pr, const Real* X0, const Real P[2][2], int T, bool Tail)
 {
 	MpcRun Run;
-	double X[2] = {X0[0], X0[1]};
-	double J = 0;
+	Real X[2] = {X0[0], X0[1]};
+	Real J = 0;
 	int Skip = 0;
 	Run.MinPos = X[0];
 	const bool CanTail = Tail && !Pr.HasPmin && Pr.Terminal == MpcTermNone;
@@ -2011,7 +2023,7 @@ MpcRun MpcClosedLoop(MpcProblem& Pr, const double* X0, const double P[2][2], int
 			--Skip;
 			if (Try)
 			{
-				double Jt = 0;
+				Real Jt = 0;
 				if (MpcLinearTail(Pr, X, T - t, &Run, &Jt))
 				{
 					Run.J = J + Jt;
@@ -2024,10 +2036,10 @@ MpcRun MpcClosedLoop(MpcProblem& Pr, const double* X0, const double P[2][2], int
 		}
 		J += MpcStage(Pr.Pl, X, S.U[0], Pr.R);
 		MpcStep(Pr.Pl, X, S.U[0]);
-		Run.MinPos = std::min(Run.MinPos, X[0]);
-		if (!(std::fabs(X[0]) < 1e9))
+		Run.MinPos = gm::min(Run.MinPos, X[0]);
+		if (!(gm::fabs(X[0]) < 1e9))
 		{
-			Run.J = CtlInf;
+			Run.J = Real::Infinity();
 			return Run;
 		}
 	}
@@ -2039,24 +2051,24 @@ MpcRun MpcClosedLoop(MpcProblem& Pr, const double* X0, const double P[2][2], int
 
 Result LaneSat(const Call& C)
 {
-	const double Um = C.N(0), Y0 = C.N(1), R = C.N(2);
+	const Real Um = C.N(0), Y0 = C.N(1), R = C.N(2);
 	if (!(Um > 0) || !(R > 0))
 	{
 		return Result::Fail("umax and r must be > 0");
 	}
 	const MpcPlant Pl = MakeMpcPlant(0.2);
-	double P[2][2], K[2];
+	Real P[2][2], K[2];
 	MpcDare(Pl, R, P, K);
-	double X[2] = {Y0, 0};
-	double J = 0, MinPos = X[0];
+	Real X[2] = {Y0, 0};
+	Real J = 0, MinPos = X[0];
 	for (int t = 0; t < 150; ++t)
 	{
-		const double U = std::min(Um, std::max(-Um, -(K[0] * X[0] + K[1] * X[1])));
+		const Real U = gm::min(Um, gm::max(-Um, -(K[0] * X[0] + K[1] * X[1])));
 		J += MpcStage(Pl, X, U, R);
 		MpcStep(Pl, X, U);
-		MinPos = std::min(MinPos, X[0]);
+		MinPos = gm::min(MinPos, X[0]);
 	}
-	return Result::Record({{"J", J + MpcQuad(P, X)}, {"os", std::max(0.0, -MinPos)}});
+	return Result::Record({{"J", J + MpcQuad(P, X)}, {"os", gm::max(0.0, -MinPos)}});
 }
 
 Result LaneMpc(const Call& C)
@@ -2065,8 +2077,8 @@ Result LaneMpc(const Call& C)
 	{
 		return Result::Fail("N must be a whole number 1..60");
 	}
-	const int N = static_cast<int>(C.N(0));
-	const double Um = C.N(1), Y0 = C.N(2), R = C.N(3), Term = C.N(4);
+	const int N = C.N(0).ToInt();
+	const Real Um = C.N(1), Y0 = C.N(2), R = C.N(3), Term = C.N(4);
 	if (!(Um > 0) || !(R > 0))
 	{
 		return Result::Fail("umax and r must be > 0");
@@ -2076,31 +2088,31 @@ Result LaneMpc(const Call& C)
 		return Result::Fail("term: 1 terminal cost P (DARE), 0 none");
 	}
 	const MpcPlant Pl = MakeMpcPlant(0.2);
-	double P[2][2], K[2];
+	Real P[2][2], K[2];
 	MpcDare(Pl, R, P, K);
-	const double Zero[2][2] = {{0, 0}, {0, 0}};
+	const Real Zero[2][2] = {{0, 0}, {0, 0}};
 	MpcProblem Pr;
 	if (!MpcBuild(Pl, N, R, Term == 1 ? P : Zero, -Um, Um, false, 0, MpcTermNone, &Pr))
 	{
 		return Result::Fail("condensed Hessian is not positive definite");
 	}
-	const double X0[2] = {Y0, 0};
+	const Real X0[2] = {Y0, 0};
 	const MpcRun Run = MpcClosedLoop(Pr, X0, P, 150, true);
 	if (Run.Fail >= 0)
 	{
 		return Result::Fail("QP infeasible at step " + std::to_string(Run.Fail));
 	}
-	return Result::Record({{"J", Run.J}, {"os", std::max(0.0, -Run.MinPos)}, {"V", Run.V0}});
+	return Result::Record({{"J", Run.J}, {"os", gm::max(0.0, -Run.MinPos)}, {"V", Run.V0}});
 }
 
 Result Lander(const Call& C)
 {
-	if (!IsWhole(C.N(0), 1, 60))
+	if (!IsWhole(C.N(0), 1, 40))
 	{
-		return Result::Fail("N must be a whole number 1..60");
+		return Result::Fail("N must be a whole number 1..40 (the bench's range)");
 	}
-	const int N = static_cast<int>(C.N(0));
-	const double H0 = C.N(1), V0 = C.N(2), Uh = C.N(3), Mode = C.N(4);
+	const int N = C.N(0).ToInt();
+	const Real H0 = C.N(1), V0 = C.N(2), Uh = C.N(3), Mode = C.N(4);
 	if (!(Uh > 0))
 	{
 		return Result::Fail("uh (braking limit) must be > 0");
@@ -2109,29 +2121,29 @@ Result Lander(const Call& C)
 	{
 		return Result::Fail("mode: 0 no terminal cost, 1 terminal cost P, 2 P and v_N >= 0, 3 x_N = 0");
 	}
-	const double R = 0.1;
+	const Real R = 0.1;
 	const MpcPlant Pl = MakeMpcPlant(0.2);
-	double P[2][2], K[2];
+	Real P[2][2], K[2];
 	MpcDare(Pl, R, P, K);
-	const double Zero[2][2] = {{0, 0}, {0, 0}};
+	const Real Zero[2][2] = {{0, 0}, {0, 0}};
 	const int Term = Mode == 2 ? MpcTermStop : (Mode == 3 ? MpcTermOrigin : MpcTermNone);
 	MpcProblem Pr;
 	if (!MpcBuild(Pl, N, R, Mode == 0 ? Zero : P, -1, Uh, true, 0, Term, &Pr))
 	{
 		return Result::Fail("condensed Hessian is not positive definite");
 	}
-	const double X0[2] = {H0, -V0};
+	const Real X0[2] = {H0, -V0};
 	const MpcRun Run = MpcClosedLoop(Pr, X0, P, 150, false);
-	return Result::Record({{"fail", static_cast<double>(Run.Fail)}, {"alt", Run.X[0]}, {"vel", Run.X[1]}, {"J", Run.J}});
+	return Result::Record({{"fail", Real(Run.Fail)}, {"alt", Run.X[0]}, {"vel", Run.X[1]}, {"J", Run.J}});
 }
 
 /* ---------- dynamics: chapter 8 ---------- */
 
 // RK4 step as the chapter page writes it.
 template <typename Field>
-void Rk4Step(const Field& F, double* X, double Dt)
+void Rk4Step(const Field& F, Real* X, Real Dt)
 {
-	double K1[2], K2[2], K3[2], K4[2], T[2];
+	Real K1[2], K2[2], K3[2], K4[2], T[2];
 	F(X, K1);
 	T[0] = X[0] + Dt / 2 * K1[0];
 	T[1] = X[1] + Dt / 2 * K1[1];
@@ -2148,49 +2160,49 @@ void Rk4Step(const Field& F, double* X, double Dt)
 
 // Area inside the unstable limit cycle of the reversed Van der Pol oscillator: one loop of the cycle,
 // traced as a stable cycle in reverse time, by the shoelace formula (the page's cycle()).
-double VdpBasinArea()
+Real VdpBasinArea()
 {
-	auto Back = [](const double* Y, double* Out) {
+	auto Back = [](const Real* Y, Real* Out) {
 		Out[0] = -(-Y[1]);
 		Out[1] = -(Y[0] + (Y[0] * Y[0] - 1) * Y[1]);
 	};
-	double X[2] = {0.5, 0};
+	Real X[2] = {0.5, 0};
 	for (int i = 0; i < 5000; ++i)
 	{
 		Rk4Step(Back, X, 0.01);
 	}
-	std::vector<double> Px{X[0]}, Py{X[1]};
-	double Acc = 0, Prev = std::atan2(X[1], X[0]);
+	std::vector<Real> Px{X[0]}, Py{X[1]};
+	Real Acc = 0, Prev = gm::atan2(X[1], X[0]);
 	for (int i = 0; i < 4000; ++i)
 	{
 		Rk4Step(Back, X, 0.005);
-		const double A = std::atan2(X[1], X[0]);
-		double D = A - Prev;
-		if (D > cst::Pi)
+		const Real A = gm::atan2(X[1], X[0]);
+		Real D = A - Prev;
+		if (D > cst::Pi())
 		{
-			D -= 2 * cst::Pi;
+			D -= 2 * cst::Pi();
 		}
-		if (D < -cst::Pi)
+		if (D < -cst::Pi())
 		{
-			D += 2 * cst::Pi;
+			D += 2 * cst::Pi();
 		}
 		Acc += D;
 		Prev = A;
 		Px.push_back(X[0]);
 		Py.push_back(X[1]);
-		if (std::fabs(Acc) >= 2 * cst::Pi)
+		if (gm::fabs(Acc) >= 2 * cst::Pi())
 		{
 			break;
 		}
 	}
-	double Area = 0;
+	Real Area = 0;
 	const size_t N = Px.size();
 	for (size_t i = 0; i < N; ++i)
 	{
 		const size_t j = (i + 1) % N;
 		Area += Px[i] * Py[j] - Py[i] * Px[j];
 	}
-	return std::fabs(Area) / 2;
+	return gm::fabs(Area) / 2;
 }
 
 // Largest sublevel set {x'Px < c} of the linearization's Lyapunov function inside {Vdot < 0}. On the ray
@@ -2198,7 +2210,7 @@ double VdpBasinArea()
 // its level are closed forms; c* is their minimum over t (rays out to r = 4, as on the page).
 Result Roa(const Call& C)
 {
-	const double Qw = C.N(0);
+	const Real Qw = C.N(0);
 	if (!(Qw > 0))
 	{
 		return Result::Fail("q must be > 0");
@@ -2210,27 +2222,27 @@ Result Roa(const Call& C)
 	{
 		return Result::Fail(E);
 	}
-	const double P11 = P(0, 0), P12 = P(0, 1), P22 = P(1, 1);
-	auto Level = [&](double T) {
-		const double Cs = std::cos(T), Sn = std::sin(T);
-		const double Den = 2 * Cs * Cs * Sn * (P12 * Cs + P22 * Sn);
+	const Real P11 = P(0, 0), P12 = P(0, 1), P22 = P(1, 1);
+	auto Level = [&](Real T) {
+		const Real Cs = gm::cos(T), Sn = gm::sin(T);
+		const Real Den = 2 * Cs * Cs * Sn * (P12 * Cs + P22 * Sn);
 		if (!(Den > 0))
 		{
-			return CtlInf;
+			return Real::Infinity();
 		}
-		const double R2 = (Cs * Cs + Qw * Sn * Sn) / Den;
+		const Real R2 = (Cs * Cs + Qw * Sn * Sn) / Den;
 		if (R2 > 16)
 		{
-			return CtlInf;
+			return Real::Infinity();
 		}
 		return R2 * (P11 * Cs * Cs + 2 * P12 * Cs * Sn + P22 * Sn * Sn);
 	};
 	const int Grid = 7200;
-	double Best = CtlInf;
+	Real Best = Real::Infinity();
 	int BestI = -1;
 	for (int i = 0; i < Grid; ++i)
 	{
-		const double L = Level(cst::Pi * i / Grid);
+		const Real L = Level(cst::Pi() * i / Grid);
 		if (L < Best)
 		{
 			Best = L;
@@ -2241,9 +2253,9 @@ Result Roa(const Call& C)
 	{
 		return Result::Fail("no ray meets Vdot >= 0 within r = 4");
 	}
-	double Lo = cst::Pi * (BestI - 1) / Grid, Hi = cst::Pi * (BestI + 1) / Grid;
-	const double Gr = (std::sqrt(5.0) - 1) / 2;
-	double X1 = Hi - Gr * (Hi - Lo), X2 = Lo + Gr * (Hi - Lo), F1 = Level(X1), F2 = Level(X2);
+	Real Lo = cst::Pi() * (BestI - 1) / Grid, Hi = cst::Pi() * (BestI + 1) / Grid;
+	const Real Gr = (gm::sqrt(5.0) - 1) / 2;
+	Real X1 = Hi - Gr * (Hi - Lo), X2 = Lo + Gr * (Hi - Lo), F1 = Level(X1), F2 = Level(X2);
 	for (int It = 0; It < 200 && Hi - Lo > 1e-15; ++It)
 	{
 		if (F1 < F2)
@@ -2263,35 +2275,35 @@ Result Roa(const Call& C)
 			F2 = Level(X2);
 		}
 	}
-	const double Cstar = std::min(Best, std::min(F1, F2));
-	const double Area = cst::Pi * Cstar / std::sqrt(P11 * P22 - P12 * P12);
-	const double Basin = VdpBasinArea();
+	const Real Cstar = gm::min(Best, gm::min(F1, F2));
+	const Real Area = cst::Pi() * Cstar / gm::sqrt(P11 * P22 - P12 * P12);
+	const Real Basin = VdpBasinArea();
 	return Result::Record({{"c", Cstar}, {"area", Area}, {"basin", Basin}, {"frac", Area / Basin}});
 }
 
 // Nomoto ship T r' + r = K (delta + wave sin(0.5 t)), rudder limited to 35 deg (the page's ship()).
 Result Nomoto(const Call& C)
 {
-	const double Ctrl = C.N(0);
+	const Real Ctrl = C.N(0);
 	if (Ctrl != 1 && Ctrl != 2 && Ctrl != 3 && Ctrl != 4)
 	{
 		return Result::Fail("ctrl: 1 PID, 2 PID + anti-windup, 3 sliding mode, 4 sliding mode with a sign law");
 	}
-	const double Sk = 0.2, St = 15, Sdmax = 35 * cst::Pi / 180;
-	const double Psid = C.N(1), Wv = C.N(2), Tf = 200, Dt = 0.02;
-	const double Kp = 1.2, Kd = 12, Ki = 0.02, Lam = 0.1, Kk = 0.006, Phi = 0.004;
-	const double StepDeg = Psid * 180 / cst::Pi;
-	double Psi = 0, R = 0, I = 0, MaxDeg = -CtlInf, Settle = 0, Reach = CtlNan, S0 = 0;
+	const Real Sk = 0.2, St = 15, Sdmax = 35 * cst::Pi() / 180;
+	const Real Psid = C.N(1), Wv = C.N(2), Tf = 200, Dt = 0.02;
+	const Real Kp = 1.2, Kd = 12, Ki = 0.02, Lam = 0.1, Kk = 0.006, Phi = 0.004;
+	const Real StepDeg = Psid * 180 / cst::Pi();
+	Real Psi = 0, R = 0, I = 0, MaxDeg = -Real::Infinity(), Settle = 0, Reach = Real::NaN(), S0 = 0;
 	int Sw = 0, Last = 0;
-	const int Steps = static_cast<int>(std::round(Tf / Dt));
+	const int Steps = static_cast<int>(gm::lround(Tf / Dt));
 	for (int i = 0; i < Steps; ++i)
 	{
-		const double T = i * Dt, E = Psi - Psid, S = R + Lam * E;
-		double Dsat = 0;
+		const Real T = i * Dt, E = Psi - Psid, S = R + Lam * E;
+		Real Dsat = 0;
 		if (Ctrl <= 2)
 		{
-			const double D = -(Kp * E + Kd * R + Ki * I);
-			Dsat = std::max(-Sdmax, std::min(Sdmax, D));
+			const Real D = -(Kp * E + Kd * R + Ki * I);
+			Dsat = gm::max(-Sdmax, gm::min(Sdmax, D));
 			if (Ctrl == 1 || D == Dsat)
 			{
 				I += E * Dt;
@@ -2299,9 +2311,9 @@ Result Nomoto(const Call& C)
 		}
 		else
 		{
-			const double Sign = S > 0 ? 1.0 : (S < 0 ? -1.0 : 0.0);
-			const double Sat = Ctrl == 3 ? (std::fabs(S) < Phi ? S / Phi : Sign) : Sign;
-			Dsat = std::max(-Sdmax, std::min(Sdmax, (R - Lam * St * R - St * Kk * Sat) / Sk));
+			const Real Sign = S > 0 ? 1.0 : (S < 0 ? -1.0 : 0.0);
+			const Real Sat = Ctrl == 3 ? (gm::fabs(S) < Phi ? S / Phi : Sign) : Sign;
+			Dsat = gm::max(-Sdmax, gm::min(Sdmax, (R - Lam * St * R - St * Kk * Sat) / Sk));
 		}
 		const int Sg = Dsat > 0 ? 1 : -1;
 		if (Sg != Last && i > 0)
@@ -2309,27 +2321,27 @@ Result Nomoto(const Call& C)
 			++Sw;
 		}
 		Last = Sg;
-		R += (-R + Sk * (Dsat + Wv * std::sin(0.5 * T))) / St * Dt;
+		R += (-R + Sk * (Dsat + Wv * gm::sin(0.5 * T))) / St * Dt;
 		Psi += R * Dt;
 		// The page records (t, psi, r, dsat, s) with psi already advanced and s from before the step.
-		const double Deg = Psi * 180 / cst::Pi;
-		MaxDeg = std::max(MaxDeg, Deg);
-		if (std::fabs(Deg - StepDeg) > 2)
+		const Real Deg = Psi * 180 / cst::Pi();
+		MaxDeg = gm::max(MaxDeg, Deg);
+		if (gm::fabs(Deg - StepDeg) > 2)
 		{
 			Settle = T;
 		}
 		if (i == 0)
 		{
-			S0 = std::fabs(S);
+			S0 = gm::fabs(S);
 		}
-		if (std::isnan(Reach) && std::fabs(S) < 0.004)
+		if (gm::isnan(Reach) && gm::fabs(S) < 0.004)
 		{
 			Reach = T;
 		}
 	}
-	const double Eta = Kk - Sk * Wv / St;
-	const double Over = std::max(0.0, MaxDeg - StepDeg) * cst::Pi / 180;
-	return Result::Record({{"over", Over}, {"settle", Settle}, {"sw", static_cast<double>(Sw)}, {"reach", Reach}, {"bound", Eta > 0 ? S0 / Eta : CtlInf}});
+	const Real Eta = Kk - Sk * Wv / St;
+	const Real Over = gm::max(0.0, MaxDeg - StepDeg) * cst::Pi() / 180;
+	return Result::Record({{"over", Over}, {"settle", Settle}, {"sw", Real(Sw)}, {"reach", Reach}, {"bound", Eta > 0 ? S0 / Eta : Real::Infinity()}});
 }
 
 Result LogMap(const Call& C)
@@ -2338,9 +2350,9 @@ Result LogMap(const Call& C)
 	{
 		return Result::Fail("n must be a whole number 0..1e6");
 	}
-	const double R = C.N(0);
-	double X = C.N(1);
-	const long long N = static_cast<long long>(C.N(2));
+	const Real R = C.N(0);
+	Real X = C.N(1);
+	const long long N = C.N(2).ToLong();
 	for (long long i = 0; i < N; ++i)
 	{
 		X = R * X * (1 - X);
@@ -2350,13 +2362,13 @@ Result LogMap(const Call& C)
 
 Result LyapExp(const Call& C)
 {
-	if (!IsWhole(C.N(1), 1, 2e6))
+	if (!IsWhole(C.N(1), 1, 2e5))
 	{
-		return Result::Fail("n must be a whole number 1..2e6");
+		return Result::Fail("n must be a whole number 1..2e5");
 	}
-	const double R = C.N(0);
-	const int N = static_cast<int>(C.N(1));
-	double X = 0.3, S = 0;
+	const Real R = C.N(0);
+	const int N = C.N(1).ToInt();
+	Real X = 0.3, S = 0;
 	for (int i = 0; i < 500; ++i)
 	{
 		X = R * X * (1 - X);
@@ -2364,26 +2376,26 @@ Result LyapExp(const Call& C)
 	for (int i = 0; i < N; ++i)
 	{
 		X = R * X * (1 - X);
-		S += std::log(std::fabs(R * (1 - 2 * X)) + 1e-300);
+		S += gm::log(gm::fabs(R * (1 - 2 * X)) + 1e-300);
 	}
 	return Result::Of(S / N);
 }
 
 Result LogPeriod(const Call& C)
 {
-	const double R = C.N(0);
-	double X = 0.3;
+	const Real R = C.N(0);
+	Real X = 0.3;
 	for (int i = 0; i < 4000; ++i)
 	{
 		X = R * X * (1 - X);
 	}
-	const double X0 = X;
+	const Real X0 = X;
 	for (int P = 1; P <= 64; ++P)
 	{
 		X = R * X * (1 - X);
-		if (std::fabs(X - X0) < 1e-7)
+		if (gm::fabs(X - X0) < 1e-7)
 		{
-			return Result::Of(static_cast<double>(P));
+			return Result::Of(Real(P));
 		}
 	}
 	return Result::Of(0.0);
@@ -2391,27 +2403,27 @@ Result LogPeriod(const Call& C)
 
 // Superstable parameters R_0 = 2, R_1 = 1 + sqrt 5, R_n by Newton on f^(2^n)(1/2) = 1/2 from the
 // Feigenbaum extrapolation of the previous two (the page's feigenbaum()).
-std::vector<double> SuperstableChain(int N)
+std::vector<Real> SuperstableChain(int N)
 {
-	std::vector<double> Rs{2.0, 1 + std::sqrt(5.0)};
+	std::vector<Real> Rs{2.0, 1 + gm::sqrt(5.0)};
 	for (int n = 2; n <= N; ++n)
 	{
-		const double Guess = Rs[Rs.size() - 1] + (Rs[Rs.size() - 1] - Rs[Rs.size() - 2]) / 4.669;
+		const Real Guess = Rs[Rs.size() - 1] + (Rs[Rs.size() - 1] - Rs[Rs.size() - 2]) / 4.669;
 		const long long Iter = 1LL << n;
-		auto F = [Iter](double Rr) {
-			double X = 0.5;
+		auto F = [Iter](Real Rr) {
+			Real X = 0.5;
 			for (long long i = 0; i < Iter; ++i)
 			{
 				X = Rr * X * (1 - X);
 			}
 			return X - 0.5;
 		};
-		double R = Guess;
+		Real R = Guess;
 		for (int k = 0; k < 60; ++k)
 		{
-			const double Hh = 1e-9, Dr = F(R) / ((F(R + Hh) - F(R - Hh)) / (2 * Hh));
+			const Real Hh = 1e-9, Dr = F(R) / ((F(R + Hh) - F(R - Hh)) / (2 * Hh));
 			R -= Dr;
-			if (std::fabs(Dr) < 1e-14)
+			if (gm::fabs(Dr) < 1e-14)
 			{
 				break;
 			}
@@ -2427,7 +2439,7 @@ Result Superstab(const Call& C)
 	{
 		return Result::Fail("n must be a whole number 0..12");
 	}
-	const int N = static_cast<int>(C.N(0));
+	const int N = C.N(0).ToInt();
 	return Result::Of(SuperstableChain(N)[static_cast<size_t>(N)]);
 }
 
@@ -2437,30 +2449,30 @@ Result Feigen(const Call& C)
 	{
 		return Result::Fail("n must be a whole number 2..12");
 	}
-	const int N = static_cast<int>(C.N(0));
-	const std::vector<double> Rs = SuperstableChain(N);
+	const int N = C.N(0).ToInt();
+	const std::vector<Real> Rs = SuperstableChain(N);
 	return Result::Of((Rs[N - 1] - Rs[N - 2]) / (Rs[N] - Rs[N - 1]));
 }
 
 // Damped pendulum th'' = -sin th - b th' by RK4 at dt = 0.01 (chapter 8, LaSalle).
 Result Pendulum(const Call& C)
 {
-	const double B = C.N(1), Tend = C.N(2);
+	const Real B = C.N(1), Tend = C.N(2);
 	if (!(Tend >= 0 && Tend <= 1000))
 	{
 		return Result::Fail("t must be 0..1000 s");
 	}
-	auto F = [B](const double* Z, double* Out) {
+	auto F = [B](const Real* Z, Real* Out) {
 		Out[0] = Z[1];
-		Out[1] = -std::sin(Z[0]) - B * Z[1];
+		Out[1] = -gm::sin(Z[0]) - B * Z[1];
 	};
-	double Z[2] = {C.N(0), 0};
-	const long long Steps = std::llround(Tend / 0.01);
+	Real Z[2] = {C.N(0), 0};
+	const long long Steps = gm::llround(Tend / 0.01);
 	for (long long i = 0; i < Steps; ++i)
 	{
 		Rk4Step(F, Z, 0.01);
 	}
-	return Result::Record({{"th", Z[0]}, {"w", Z[1]}, {"E", 0.5 * Z[1] * Z[1] + 1 - std::cos(Z[0])}});
+	return Result::Record({{"th", Z[0]}, {"w", Z[1]}, {"E", 0.5 * Z[1] * Z[1] + 1 - gm::cos(Z[0])}});
 }
 } // namespace control_detail
 
@@ -2528,14 +2540,14 @@ void RegisterControlLibrary(Registry& R)
 	Def(R, "lqgcl", "control", "approach/ section 3: the separation principle", "LQG closed loop in (x, prior estimate) with gain g at the plant input; eig = eig(A-BK) and eig(A-AMC)", "2n x 2n matrix",
 		{Mat("A", "-"), Mat("B", "-"), Mat("C", "-"), Mat("K", "-"), Mat("M", "-"), Num("g", "-", 1)}, &LqgCl);
 	Def(R, "doyle", "control", "approach/ section 5: Doyle's 1978 example", "Doyle's LQG example: gains f, d and the stable input-gain interval of LQG and of LQR", "record f, d, lo, hi (LQG), rlo, rhi (LQR)",
-		{Num("q", "-", 100), Num("sigma", "- (nan: = q)", CtlNan)}, &Doyle);
+		{Num("q", "-", 100), Num("sigma", "- (nan: = q)", Real::NaN())}, &Doyle);
 	Def(R, "approach", "control", "approach/ sections 4 and 5: dispersion and margins", "glideslope approach: stationary dispersion and gain interval of 1 LQR, 2 LQG, 3 PID", "record sd (m), J, su (rad), rho, lo, hi, rd, rq, glo, ghi",
 		{Num("mode", "-", 2), Num("sg", "m/s", 1.5), Num("tau", "s", 4), Num("sd", "m", 2), Num("sv", "m/s", 0.3)}, &Glide);
 	Def(R, "lanesat", "control", "mpc/ section 2: saturated LQR lane change", "lane change by LQR clipped to |u| <= umax (150 steps of 0.2 s)", "record J, os (overshoot, m)",
 		{Num("umax", "m/s^2", 1), Num("y0", "m", 3.5), Num("r", "-", 0.01)}, &LaneSat);
 	Def(R, "lanempc", "control", "mpc/ sections 2 and 4: constrained MPC", "lane change by constrained MPC (dual active-set QP each step), term 1 = terminal cost P, 0 = none", "record J (closed loop), os (m), V (open-loop V_N)",
 		{Num("N", "steps", 20), Num("umax", "m/s^2", 1), Num("y0", "m", 3.5), Num("r", "-", 0.01), Num("term", "-", 1)}, &LaneMpc);
-	Def(R, "lander", "control", "mpc/ section 3: receding horizon and terminal sets", "lander MPC with altitude >= 0; mode 0 none, 1 P, 2 P + v_N >= 0, 3 x_N = 0", "record fail (step, -1 = none), alt (m), vel (m/s), J",
+	Def(R, "lander", "control", "mpc/ section 3: receding horizon and terminal sets", "lander MPC with altitude >= 0 (N <= 40); mode 0 none, 1 P, 2 P + v_N >= 0, 3 x_N = 0", "record fail (step, -1 = none), alt (m), vel (m/s), J",
 		{Num("N", "steps", 22), Num("h0", "m", 40), Num("v0", "m/s (down)", 8), Num("uh", "m/s^2", 2), Num("mode", "-", 0)}, &Lander);
 
 	// dynamics
@@ -2546,10 +2558,10 @@ void RegisterControlLibrary(Registry& R)
 	Def(R, "roa", "dynamics", "ch08 bench: a certificate for a basin", "reversed Van der Pol: certified level c* of V = x'Px (Q = diag(1, q)), its area and the true basin", "record c, area, basin, frac",
 		{Num("q", "-", 1)}, &Roa);
 	Def(R, "nomoto", "dynamics", "ch08 bench: an autopilot that overshoots", "Nomoto ship heading change: 1 PID, 2 PID + anti-windup, 3 sliding mode, 4 sign law", "record over (rad), settle (s), sw (rudder reversals), reach (s), bound (s)",
-		{Num("ctrl", "-", 1), Num("step", "rad", 60 * cst::Pi / 180), Num("wave", "rad", 3 * cst::Pi / 180)}, &Nomoto);
+		{Num("ctrl", "-", 1), Num("step", "rad", 60 * cst::Pi() / 180), Num("wave", "rad", 3 * cst::Pi() / 180)}, &Nomoto);
 	Def(R, "logmap", "dynamics", "ch08 counterexample: the logistic map", "n-th iterate of x -> r x (1 - x)", "x_n",
 		{Num("r", "-"), Num("x0", "-"), Num("n", "steps")}, &LogMap);
-	Def(R, "lyapexp", "dynamics", "ch08 counterexample: the logistic map", "Lyapunov exponent of the logistic map from x0 = 0.3 (500 steps burn-in)", "per step",
+	Def(R, "lyapexp", "dynamics", "ch08 counterexample: the logistic map", "Lyapunov exponent of the logistic map from x0 = 0.3 (500 steps burn-in, n <= 2e5)", "per step",
 		{Num("r", "-", 3.83), Num("n", "steps", 20000)}, &LyapExp);
 	Def(R, "logperiod", "dynamics", "ch08 counterexample: the logistic map", "period of the logistic attractor (0 if none up to 64)", "steps",
 		{Num("r", "-", 3.83)}, &LogPeriod);

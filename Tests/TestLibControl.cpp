@@ -3,6 +3,7 @@
 #include "CalcSession.h"
 #include "TestFramework.h"
 
+#include <chrono>
 #include <string>
 
 using mcalc::Matrix;
@@ -22,7 +23,7 @@ Matrix EvalM(Session& S, const std::string& Line)
 	return O.Val.M;
 }
 
-double MaxDiff(const Matrix& A, const Matrix& B)
+mcalc::Real MaxDiff(const Matrix& A, const Matrix& B)
 {
 	if (A.Rows != B.Rows || A.Cols != B.Cols || A.IsEmpty())
 	{
@@ -94,7 +95,7 @@ TEST(control_mpc_with_terminal_P_is_lqr_for_every_horizon)
 		CHECK(MaxDiff(EvalM(S, "mpcgain(A, B, Q, R, P, " + std::to_string(N) + ")"), K) < 1e-9);
 	}
 	// Without terminal cost the N-step gain approaches LQR's as N grows.
-	const double Far = MaxDiff(EvalM(S, "mpcgain(A, B, Q, R, zeros(2), 3)"), K), Near = MaxDiff(EvalM(S, "mpcgain(A, B, Q, R, zeros(2), 200)"), K);
+	const mcalc::Real Far = MaxDiff(EvalM(S, "mpcgain(A, B, Q, R, zeros(2), 3)"), K), Near = MaxDiff(EvalM(S, "mpcgain(A, B, Q, R, zeros(2), 200)"), K);
 	CHECK(Near < 1e-9 && Far > 1e-3);
 	// The closed-loop cost of the LQR gain is x0'Px0.
 	CHECK_NEAR(EvalM(S, "clcost(A, B, Q, R, K, [3; -1])").ScalarValue(), EvalM(S, "[3, -1]*P*[3; -1]").ScalarValue(), 1e-9);
@@ -112,7 +113,7 @@ TEST(control_duality_separation_and_hamiltonian_halves)
 	// The two halves of the Hamiltonian (ch03 continuous guise): both solve the ARE, P > 0 and P < 0.
 	S.Execute("Ao = [0, 1; -2, -0.3]; Qo = [0.1, 0; 0, 0.5]");
 	const Matrix Pp = EvalM(S, "hamare(Ao, C, Qo, 0.2, 1)"), Pm = EvalM(S, "hamare(Ao, C, Qo, 0.2, -1)");
-	std::vector<double> W;
+	std::vector<mcalc::Real> W;
 	Matrix V;
 	CHECK(la::SymmetricEigen(Pp, &W, &V, nullptr) && W[0] > 0);
 	CHECK(la::SymmetricEigen(Pm, &W, &V, nullptr) && W[1] < 0);
@@ -136,5 +137,35 @@ TEST(control_scalar_map_readings_agree)
 		S.Execute(Set);
 		CHECK(EvalM(S, "mobclass(a^2*r + q*h^2, q*r, h^2, r).type").ScalarValue() != 4);
 		CHECK(EvalM(S, "mobclass(a^2*r + q*h^2, q*r, h^2, r).disc").ScalarValue() >= 0);
+	}
+}
+
+// On the gear machine every function must stay interactive: about 0.5 s at the bench defaults and
+// about 2 s at the input caps on a desktop (bounds below are doubled for slow CI machines).
+TEST(control_timing_on_the_gears)
+{
+	struct Timed
+	{
+		const char* Line;
+		double LimitMs;
+	};
+	const Timed Lines[] = {
+		{"approach(1)", 1000}, {"approach(2)", 1000}, {"approach(3)", 1000}, {"lanempc()", 1000}, {"lander()", 1000}, {"roa()", 1000},
+		{"nomoto(4)", 1000}, {"lyapexp()", 1000}, {"pendulum()", 1000}, {"doyle()", 1000}, {"feigen()", 1000}, {"lanesat()", 1000},
+		{"lander(40, 40, 8, 2, 3)", 4000}, {"lanempc(60, 0.5, 7, 0.01, 0)", 4000}, {"lyapexp(4, 2e5)", 4000}, {"mobiter(1e6)", 4000},
+		{"kfiter(1e6)", 4000}, {"logmap(4, 0.3, 1e6)", 4000}, {"pendulum(1, 0.3, 1000)", 4000}, {"superstab(12)", 4000},
+	};
+	for (const Timed& T : Lines)
+	{
+		Session S;
+		const auto T0 = std::chrono::steady_clock::now();
+		const mcalc::Outcome O = S.Execute(T.Line);
+		const double Ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - T0).count();
+		CHECK(O.Ok);
+		if (Ms > 200)
+		{
+			std::printf("    timing: %s took %.0f ms\n", T.Line, Ms);
+		}
+		CHECK(Ms < T.LimitMs);
 	}
 }

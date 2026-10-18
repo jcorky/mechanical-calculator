@@ -331,6 +331,7 @@ for (const [N, h0, v0, uh] of [[22, 40, 8, 2], [30, 40, 8, 2], [10, 20, 5, 2.5],
 }
 err("lander(22, 40, 8, 2, 4)", "mode must be 0..3");
 err("lander(22, 40, 8, 0)", "braking limit must be > 0");
+err("lander(41)", "N <= 40, the bench's horizon range (gear arithmetic: about 1 s at N = 40)");
 
 /* ====================== dynamics: chapter 8 ====================== */
 section("dynamics: region of attraction (ch08 bench, page cycle())");
@@ -363,7 +364,9 @@ err("nomoto(5)", "ctrl must be 1..4");
 
 section("dynamics: the logistic map (ch08 page lyapExp(), period(), superstable(), feigenbaum())");
 for (const r of [3.83, 3.7, 4, 3.2, 3.5, 2.9]) {
-  emit(`lyapexp(${r})`, ch08.lyapExp(r), "rel:1e-11", `ch08 page lyapExp(${r})`);
+  const lam = ch08.lyapExp(r);
+  if (lam > 0) emit(`lyapexp(${r})`, lam, "abs:5e-3", `ch08 page lyapExp(${r}); chaotic: 18-digit decimal and IEEE double orbits decorrelate after ~55 steps, so the 20000-step average agrees only to its sampling error (mpmath at 7000 digits: r = 4 exact 0.6931401, double 0.6931585, gear 0.6933136)`);
+  else emit(`lyapexp(${r})`, lam, "rel:1e-11", `ch08 page lyapExp(${r})`);
   emit(`logperiod(${r})`, ch08.period(r) ?? 0, "abs:0", `ch08 page period(${r})${ch08.period(r) ? "" : ": chaotic, none found"}`);
 }
 emit("lyapexp(4, 200000)", Math.log(2), "abs:1e-3", "ch08 Theorem 5: lambda = ln 2 at r = 4 (page: 0.69314)");
@@ -382,6 +385,7 @@ emit("superstab(8)", 3.569939, "abs:1e-5", "phase9 claim 6: accumulation r = 3.5
 err("superstab(13)", "n <= 12");
 err("feigen(1)", "n >= 2");
 err("lyapexp(4, 0)", "n >= 1");
+err("lyapexp(4, 3e5)", "n <= 2e5 (gear arithmetic: about 1.4 s at the cap)");
 for (const [x0, n] of [[0.3, 5], [0.1, 10], [0.9, 3]]) emit(`logmap(2, ${x0}, ${n})`, (1 - Math.pow(1 - 2 * x0, 2 ** n)) / 2, "rel:1e-12", "closed form at r = 2: x_n = (1 - (1 - 2 x0)^(2^n))/2");
 emit("logmap(4, sin(pi/7)^2, 3)", Math.sin(8 * Math.PI / 7) ** 2, "rel:1e-12", "ch08 Theorem 5: x = sin^2(pi theta), theta doubles each step");
 emit("logmap(3.83, 0.3, 0)", 0.3, "abs:0", "zero steps");
